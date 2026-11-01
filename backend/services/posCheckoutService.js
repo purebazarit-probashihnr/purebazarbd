@@ -105,6 +105,7 @@ async function commitBill(req, res, next, offline) {
             productName: product.name,
             barcode: product.barcode,
             quantity: line.quantity,
+            baseQuantity: pricing.stockQuantity,
             unit: item.unit === 'PIECE' ? 'PIECE' : 'PACKAGE',
             mrp: pricing.unitPrice,
             subtotal: line.subtotal,
@@ -141,11 +142,11 @@ async function commitBill(req, res, next, offline) {
         referenceType: 'Order',
       })), { session, ordered: true });
 
-      const ledgerRows = result.bill.ledgerLines.filter((line) => line.ownerType === 'VENDOR').map((line) => ({
+      const ledgerRows = result.bill.ledgerLines.map((line, index) => ({ line, index })).filter(({ line }) => line.ownerType === 'VENDOR').map(({ line, index }) => ({
         vendorId: line.vendorId,
         orderId: created._id,
         productId: line.productId,
-        quantity: line.quantity,
+        quantity: result.lines[index].pricing.stockQuantity,
         entryType: 'SALE',
         vendorPayable: line.vendorPayable,
         companyNet: line.companyNet,

@@ -23,7 +23,7 @@ const emptyForm = {
   categoryId: '',
   brandId: '',
   unitId: '',
-  unitValue: '',
+  baseUnitId: '',
   vatApplicable: false,
   vatRate: '',
   piecesPerPackage: '',
@@ -67,15 +67,16 @@ export default function ProductFormModal({
   const marginWarning = margin !== null && margin >= 0 && margin < warningAmount;
   const invalidMrp = hasPrices && mrp < vendorPrice;
   const unitsPerPackage = Number(totalPieces(form.piecesPerPackage));
-  const unitQuantity = form.unitValue === '' ? 1 : form.unitValue;
   const hasPieces = Number.isInteger(unitsPerPackage) && unitsPerPackage > 1 && hasPrices;
-  const trueBaseCost = hasPieces ? basePieceCost(roundedMrp, unitQuantity, unitsPerPackage) : null;
+  const trueBaseCost = hasPieces ? basePieceCost(roundedMrp, unitsPerPackage) : null;
   const autoPiecePrice = hasPieces ? roundedMoney(trueBaseCost) : null;
   // Helper text depends only on MRP, quantity and pieces, so it updates on every keystroke.
   const helperPieces = Number(totalPieces(form.piecesPerPackage));
   const helperMrp = form.mrp !== '' && Number.isFinite(mrp) ? roundedMoney(mrp) : null;
+  const helperVendorCost = form.vendorPrice !== '' && Number.isInteger(helperPieces) && helperPieces > 1
+    ? roundedMoney(basePieceCost(roundedMoney(vendorPrice), helperPieces)) : null;
   const helperCost = helperMrp !== null && Number.isInteger(helperPieces) && helperPieces > 1
-    ? roundedMoney(basePieceCost(helperMrp, unitQuantity, helperPieces)) : null;
+    ? roundedMoney(basePieceCost(helperMrp, helperPieces)) : null;
   const overrideValue = form.subUnitPriceOverride === '' ? null : roundedMoney(Number(form.subUnitPriceOverride));
   const invalidOverride = hasPieces && overrideValue !== null
     && (!Number.isFinite(overrideValue) || overrideValue < trueBaseCost - 1e-9);
@@ -135,7 +136,7 @@ export default function ProductFormModal({
     }
 
     if (invalidOverride) {
-      setError(`Piece price cannot be below the margin-safe price of ${money(autoPiecePrice)}.`);
+      setError(`Base unit price cannot be below the margin-safe price of ${money(autoPiecePrice)}.`);
       return;
     }
 
@@ -144,7 +145,7 @@ export default function ProductFormModal({
       categoryId: form.categoryId,
       ...(form.brandId ? { brandId: form.brandId } : {}),
       unitId: form.unitId,
-      ...(form.unitValue !== '' ? { unitValue: Number(form.unitValue) } : {}),
+      ...(form.baseUnitId ? { baseUnitId: form.baseUnitId } : {}),
       ownerType: form.ownerType,
       ...(form.ownerType === 'VENDOR' ? { vendorId: form.vendorId.trim() } : {}),
       vendorPrice: roundedVendorPrice,
@@ -227,14 +228,17 @@ export default function ProductFormModal({
               </Select>
               {can('brands:write') && <Button type="button" variant="secondary" size="sm" className="self-end" aria-label="Quick add brand" title="Quick add brand" onClick={() => setQuickAdd('brand')}><Plus size={15} /> <T>{"Quick Add"}</T></Button>}
             </div>
-            <Input label="Unit Quantity / Value" name="unitValue" type="number" min="0" step="any" value={form.unitValue} onChange={(event) => update('unitValue', event.target.value)} placeholder="e.g. 500" className="w-full min-w-0" />
             <div className="flex min-w-0 flex-col gap-2">
-              <Select label="Unit" name="unitId" value={form.unitId} onChange={(event) => update('unitId', event.target.value)} required className="w-full min-w-0">
+              <Select label="Package unit (box, sack, dozen, tray)" name="unitId" value={form.unitId} onChange={(event) => update('unitId', event.target.value)} required className="w-full min-w-0">
                 <option value=""><T>{"Select unit"}</T></option>
                 {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>)}
               </Select>
               {can('units:write') && <Button type="button" variant="secondary" size="sm" className="self-end" aria-label="Quick add unit" title="Quick add unit" onClick={() => setQuickAdd('unit')}><Plus size={15} /> <T>{"Quick Add"}</T></Button>}
             </div>
+            <Select label="Base unit (pcs, kg)" name="baseUnitId" value={form.baseUnitId} onChange={(event) => update('baseUnitId', event.target.value)} className="w-full min-w-0">
+              <option value=""><T>{"Select base unit"}</T></option>
+              {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>)}
+            </Select>
             <Input label="Barcode" name="barcode" value="Generated when product is saved" readOnly />
           </div>
           {catalogLoading && <p role="status" className="text-xs text-slate-500"><T>{"Loading product categories, brands, and units..."}</T></p>}
@@ -254,13 +258,14 @@ export default function ProductFormModal({
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Input label="Pieces per Package" name="piecesPerPackage" type="number" min="1" step="any" value={form.piecesPerPackage} onChange={(event) => update('piecesPerPackage', event.target.value)} />
-            <Input label="Retail Piece Price (Optional)" placeholder="Optional retail piece price" name="subUnitPriceOverride" type="number" min="0" step="0.01" value={form.subUnitPriceOverride} onChange={(event) => update('subUnitPriceOverride', event.target.value)} disabled={!hasPieces} />
+            <Input label="Conversion (base units per package)" name="piecesPerPackage" type="number" min="1" step="any" value={form.piecesPerPackage} onChange={(event) => update('piecesPerPackage', event.target.value)} />
+            <Input label="Retail price per base unit (Optional)" placeholder="Optional retail price per base unit" name="subUnitPriceOverride" type="number" min="0" step="0.01" value={form.subUnitPriceOverride} onChange={(event) => update('subUnitPriceOverride', event.target.value)} disabled={!hasPieces} />
           </div>
           {helperCost !== null && (
             <div role="status" className="space-y-1 text-xs text-slate-600">
-              <p>Base piece cost: BDT {helperCost.toFixed(2)} (Calculated from {helperPieces} pieces per package)</p>
-              {invalidOverride && <p className="text-red-700">Custom piece price must be at least {autoPiecePrice.toFixed(2)}.</p>}
+              <p>MRP per base unit: BDT {helperCost.toFixed(2)} (1 package = {helperPieces} base units)</p>
+              {helperVendorCost !== null && <p>Vendor price per base unit: BDT {helperVendorCost.toFixed(2)}</p>}
+              {invalidOverride && <p className="text-red-700">Custom base unit price must be at least {autoPiecePrice.toFixed(2)}.</p>}
             </div>
           )}
 

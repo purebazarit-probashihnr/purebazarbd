@@ -35,6 +35,7 @@ function productQuery(result) {
   const query = {
     select: jest.fn(() => query),
     sort: jest.fn(() => query),
+    session: jest.fn(() => query),
     lean: jest.fn(() => Promise.resolve(result)),
   };
   return query;
@@ -171,6 +172,21 @@ describe('goods receive and movement-derived stock endpoints', () => {
     const stock = await request(app).get(`/api/stock?warehouseId=${warehouseId}`).set(auth);
     expect(stock.status).toBe(200);
     expect(stock.body.stock).toEqual([expect.objectContaining({ productId, quantity: 13 })]);
+  });
+
+  it('converts received packages to base units in stock and keeps loose base units as entered', async () => {
+    Product.find.mockImplementation(() => productQuery([{ ...rice, unitsPerPackage: 25 }]));
+    const draft = await createDraft([{ productId, receivedQuantity: 2, acceptedQuantity: 2, rejectedQuantity: 0 }]);
+    expect(draft.status).toBe(201);
+    expect(draft.body.goodsReceive.lines[0]).toMatchObject({ receivedQuantity: 2, unit: 'PACKAGE' });
+    await request(app).post(`/api/goods-receives/${draft.body.goodsReceive.id}/approve`).set(auth);
+    expect(movements.at(-1)).toMatchObject({ quantity: 50, type: 'GRN' });
+
+    const loose = await createDraft([{
+      productId, unit: 'BASE', receivedQuantity: 7, acceptedQuantity: 7, rejectedQuantity: 0,
+    }]);
+    await request(app).post(`/api/goods-receives/${loose.body.goodsReceive.id}/approve`).set(auth);
+    expect(movements.at(-1)).toMatchObject({ quantity: 7, type: 'GRN' });
   });
 
   it('keeps a draft out of stock', async () => {

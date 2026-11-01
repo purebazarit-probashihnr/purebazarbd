@@ -4,7 +4,7 @@ import { Minus, Plus, Trash2 } from 'lucide-react';
 import Input from '@/components/ui/input';
 import Select from '@/components/ui/select';
 import {
-  availableStock, canSellPieces, isPiece, lineTotal, unitPrice,
+  allowsFraction, availableStock, canSellPieces, isPiece, lineTotal, stockLabel, unitPrice,
 } from '@/services/pos-cart-utils.cjs';
 import { T } from '@/i18n/language-provider';
 
@@ -26,7 +26,7 @@ export default function CartPanel({ items, onQuantity, onUnit, onRemove, onDisco
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="truncate font-medium text-slate-900">{item.name}</h3>
-                  <p className="text-xs text-slate-500">{item.barcode} · ৳{money(unitPrice(item))} per {isPiece(item) ? 'pc' : item.packageUnitName || 'box'} · {availableStock(item)} {isPiece(item) ? 'pcs' : item.packageUnitName || 'boxes'} in stock</p>
+                  <p className="text-xs text-slate-500">{item.barcode} · ৳{money(unitPrice(item))} per {isPiece(item) ? item.baseUnitName || 'pc' : item.packageUnitName || 'box'} · {stockLabel(item)} in stock</p>
                 </div>
                 <button
                   type="button"
@@ -51,9 +51,9 @@ export default function CartPanel({ items, onQuantity, onUnit, onRemove, onDisco
                   <Input
                     label="Qty"
                     type="number"
-                    min="1"
+                    min={allowsFraction(item) ? '0.001' : '1'}
                     max={availableStock(item)}
-                    step="1"
+                    step={allowsFraction(item) ? '0.001' : '1'}
                     value={item.quantity}
                     onChange={(event) => onQuantity(item.productId, event.target.value)}
                     className="w-24"
@@ -75,7 +75,7 @@ export default function CartPanel({ items, onQuantity, onUnit, onRemove, onDisco
                     onChange={(event) => onUnit(item.productId, event.target.value)}
                   >
                     <option value="PACKAGE">{item.packageUnitName || 'Box'}</option>
-                    <option value="PIECE"><T>{"Pcs"}</T></option>
+                    <option value="PIECE">{item.baseUnitName || 'Pcs'}</option>
                   </Select>
                 )}
                 <Select

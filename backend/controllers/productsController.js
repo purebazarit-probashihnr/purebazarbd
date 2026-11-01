@@ -4,7 +4,7 @@ const {
 const { unitLabelMap, displayFields } = require('../utils/productDisplay');
 
 const editableFields = [
-  'name', 'categoryId', 'brandId', 'unitId', 'unitValue', 'ownerType', 'vendorId',
+  'name', 'categoryId', 'brandId', 'unitId', 'baseUnitId', 'unitValue', 'ownerType', 'vendorId',
   'vendorPrice', 'mrp', 'vatApplicable', 'vatRate', 'unitsPerPackage', 'subUnitPriceOverride',
 ];
 
@@ -33,7 +33,7 @@ function productData(product) {
 function productSnapshot(product) {
   const data = productData(product);
   return Object.fromEntries([
-    'name', 'categoryId', 'brandId', 'unitId', 'unitValue', 'ownerType', 'vendorId',
+    'name', 'categoryId', 'brandId', 'unitId', 'baseUnitId', 'unitValue', 'ownerType', 'vendorId',
     'vendorPrice', 'mrp', 'margin', 'vatApplicable', 'vatRate', 'barcode',
     'unitsPerPackage', 'subUnitPriceOverride', 'subUnitPrice',
   ].filter((field) => data[field] !== undefined)
@@ -61,6 +61,7 @@ async function validateReferences(data) {
   const checks = [
     [Category, data.categoryId, 'Category'],
     [Unit, data.unitId, 'Unit'],
+    [Unit, data.baseUnitId, 'Base unit'],
     [Brand, data.brandId, 'Brand'],
   ];
   for (const [Model, id, label] of checks) {

@@ -7,20 +7,19 @@ function defaultPiecesPerPackage(unit) {
   return keys.some((key) => DOZEN_KEYS.includes(key)) ? '12' : '';
 }
 
-// Pieces per package only; Unit Quantity / Value never multiplies stock. Returns '' when not a whole number above 1.
+// Base units per package; returns '' unless it is a number above 1.
 function totalPieces(piecesPerPackage) {
   const per = Number(piecesPerPackage);
-  if (piecesPerPackage === '' || !Number.isInteger(per) || per <= 1) return '';
+  if (piecesPerPackage === '' || !Number.isFinite(per) || per <= 1) return '';
   return String(per);
 }
 
-// Exact (unrounded) cost of one piece: price / unit quantity / pieces per package.
-function basePieceCost(mrp, unitQuantity, pieces) {
-  const price = Number(mrp);
-  const quantity = unitQuantity === '' || unitQuantity === undefined ? 1 : Number(unitQuantity);
+// Exact (unrounded) price of one base unit: package price / base units per package.
+function basePieceCost(packagePrice, pieces) {
+  const price = Number(packagePrice);
   const count = Number(pieces);
-  if (!Number.isFinite(price) || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(count) || count <= 0) return null;
-  return price / quantity / count;
+  if (!Number.isFinite(price) || !Number.isFinite(count) || count <= 0) return null;
+  return price / count;
 }
 
 module.exports = { defaultPiecesPerPackage, totalPieces, basePieceCost };

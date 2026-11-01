@@ -3,6 +3,7 @@ const {
   AuditLog, GoodsReceive, Location, Product, StockMovement, Vendor,
 } = require('../models');
 const { unitLabelMap, displayFields } = require('../utils/productDisplay');
+const { toBaseQuantity } = require('../utils/piecePricing');
 
 function statusError(message, status) {
   const error = new Error(message);
@@ -14,8 +15,11 @@ function normalizeLines(lines) {
   const combined = new Map();
   for (const line of lines) {
     const current = combined.get(line.productId) || {
-      productId: line.productId, receivedQuantity: 0, acceptedQuantity: 0, rejectedQuantity: 0,
+      productId: line.productId, unit: line.unit || 'PACKAGE', receivedQuantity: 0, acceptedQuantity: 0, rejectedQuantity: 0,
     };
+    if (current.unit !== (line.unit || 'PACKAGE')) {
+      throw statusError('A product cannot be received in mixed units on one goods receive', 400);
+    }
     current.receivedQuantity += line.receivedQuantity;
     current.acceptedQuantity += line.acceptedQuantity;
     current.rejectedQuantity += line.rejectedQuantity;
@@ -75,6 +79,7 @@ function receiveOutput(receive, products = []) {
         receivedQuantity: line.receivedQuantity,
         acceptedQuantity: line.acceptedQuantity,
         rejectedQuantity: line.rejectedQuantity,
+        unit: line.unit || 'PACKAGE',
       };
     }),
   };
@@ -108,7 +113,7 @@ async function searchProducts(req, res, next) {
         filter._id = { $in: grouped.filter(({ quantity }) => quantity > 0).map(({ _id }) => _id) };
       }
     }
-    let productQuery = Product.find(filter)    .select('_id name unitId barcode ownerType vendorId')
+    let productQuery = Product.find(filter)    .select('_id name unitId baseUnitId unitsPerPackage barcode ownerType vendorId')
       .sort({ name: 1 });
     if (warehouseId) productQuery = productQuery.limit(Math.min(Number(req.query.limit) || 10, 10));
     const products = await productQuery.lean();
@@ -119,6 +124,7 @@ async function searchProducts(req, res, next) {
         id: product._id.toString(),
         name: product.name,
         ...displayFields(product, labels),
+        unitsPerPackage: product.unitsPerPackage || 1,
         barcode: product.barcode,
         ownerType: product.ownerType,
         vendorId: product.vendorId?.toString() || null,
@@ -282,12 +288,15 @@ async function approveGoodsReceive(req, res, next) {
       receive.status = 'Approved';
       receive.approvedBy = req.user._id;
       await receive.save({ session });
+      const grnProducts = await Product.find({ _id: { $in: receive.lines.map((line) => line.productId) } })
+        .select('_id unitsPerPackage').session(session).lean();
+      const conversions = new Map(grnProducts.map((product) => [product._id.toString(), product]));
       const movements = receive.lines
         .filter((line) => line.acceptedQuantity > 0)
         .map((line) => ({
           productId: line.productId,
           warehouseId: receive.warehouseId,
-          quantity: line.acceptedQuantity,
+          quantity: toBaseQuantity(conversions.get(line.productId.toString()), line.unit === 'BASE' ? 'PIECE' : 'PACKAGE', line.acceptedQuantity),
           type: 'GRN',
           userId: req.user._id,
           reason: `Goods receive ${receive._id}`,

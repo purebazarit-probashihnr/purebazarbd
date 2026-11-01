@@ -200,21 +200,21 @@ describe('POS checkout API', () => {
       ...product,
       vendorPrice: 1200,
       mrp: 1557,
-      unitValue: 10,
       unitsPerPackage: 12,
     }]));
+    db.movements = [{ productId, warehouseId: outletId, quantity: 180, type: 'GRN' }];
 
     const packageResponse = await checkout({
-      items: [{ productId: productId.toString(), quantity: 10, unit: 'PACKAGE' }],
+      items: [{ productId: productId.toString(), quantity: 1, unit: 'PACKAGE' }],
       payments: [{ method: 'CASH', amount: 1557 }],
     });
     expect(packageResponse.status).toBe(201);
     expect(packageResponse.body.order).toMatchObject({
       subtotal: 1557,
       grandTotal: 1557,
-      lines: [{ quantity: 10, mrp: 155.7, subtotal: 1557 }],
+      lines: [{ quantity: 1, mrp: 1557, subtotal: 1557, baseQuantity: 12 }],
     });
-    expect(db.movements.at(-1)).toMatchObject({ quantity: -10, type: 'SALE' });
+    expect(db.movements.at(-1)).toMatchObject({ quantity: -12, type: 'SALE' });
     expect(db.ledgers).toHaveLength(1);
     expect(models.StockMovement.create).toHaveBeenCalledWith(
       expect.any(Array),
@@ -229,22 +229,22 @@ describe('POS checkout API', () => {
       ...product,
       vendorPrice: 1200,
       mrp: 1557,
-      unitValue: 10,
       unitsPerPackage: 12,
     }]));
-    db.movements = [{ productId, warehouseId: outletId, quantity: 10, type: 'GRN' }];
+    db.movements = [{ productId, warehouseId: outletId, quantity: 180, type: 'GRN' }];
     const pieceResponse = await checkout({
       items: [{ productId: productId.toString(), quantity: 1, unit: 'PIECE' }],
-      payments: [{ method: 'CASH', amount: 12.98 }],
+      payments: [{ method: 'CASH', amount: 129.75 }],
     });
 
     expect(pieceResponse.status).toBe(201);
     expect(pieceResponse.body.order).toMatchObject({
-      subtotal: 12.98,
-      grandTotal: 12.98,
-      lines: [{ quantity: 1, mrp: 12.98, subtotal: 12.98 }],
+      subtotal: 129.75,
+      grandTotal: 129.75,
+      lines: [{ quantity: 1, mrp: 129.75, subtotal: 129.75, baseQuantity: 1 }],
     });
-    expect(db.movements.at(-1).quantity).toBeCloseTo(-1 / 12, 10);
+    expect(db.movements.at(-1).quantity).toBe(-1);
+    expect(db.ledgers.at(-1)).toMatchObject({ quantity: 1, vendorPayable: 100 });
   });
 
   it('completes a wallet sale without a member as MRP total minus 5%, with no Probashi call', async () => {
@@ -384,19 +384,19 @@ describe('POS checkout API', () => {
     expect(db.orders).toHaveLength(1);
   });
 
-  describe('piece selling from box stock', () => {
+  describe('piece selling from box stock (stock kept in base units)', () => {
     const toffen = {
       _id: productId, name: 'Toffen Tablet', barcode: '8900000000210',
-      ownerType: 'COMPANY', vendorPrice: 1260, mrp: 2100, unitsPerPackage: 210, vatApplicable: false,
+      ownerType: 'VENDOR', vendorId, vendorPrice: 1260, mrp: 2100, unitsPerPackage: 210, vatApplicable: false,
     };
     const pieces = (quantity) => [{ productId: productId.toString(), quantity, unit: 'PIECE' }];
 
     beforeEach(() => {
       models.Product.find.mockReturnValue(query([toffen]));
-      db.movements = [{ productId, warehouseId: outletId, quantity: 5, type: 'GRN' }];
+      db.movements = [{ productId, warehouseId: outletId, quantity: 5 * 210, type: 'GRN' }];
     });
 
-    it('bills pieces at the per-piece price and deducts a fraction of a box', async () => {
+    it('bills pieces at the per-piece price and deducts exactly those base units', async () => {
       const response = await checkout({
         items: pieces(3), payments: [{ method: 'CASH', amount: 30 }],
       });
@@ -404,7 +404,7 @@ describe('POS checkout API', () => {
       expect(db.orders[0].lines[0]).toMatchObject({
         quantity: 3, unit: 'PIECE', mrp: 10, subtotal: 30,
       });
-      expect(db.movements.at(-1).quantity).toBeCloseTo(-3 / 210, 10);
+      expect(db.movements.at(-1).quantity).toBe(-3);
     });
 
     it('rejects fractional pieces and sales beyond the box stock', async () => {
@@ -421,7 +421,15 @@ describe('POS checkout API', () => {
       });
       expect(response.status).toBe(201);
       expect(db.orders[0].lines[0]).toMatchObject({ unit: 'PACKAGE', mrp: 2100 });
-      expect(db.movements.at(-1).quantity).toBe(-1);
+      expect(db.movements.at(-1).quantity).toBe(-210);
+    });
+
+    it('selling 1 box then 5 pcs reduces stock by 215 base units', async () => {
+      await checkout({ items: [{ productId: productId.toString(), quantity: 1 }], payments: [{ method: 'CASH', amount: 2100 }] });
+      await checkout({ items: pieces(5), payments: [{ method: 'CASH', amount: 50 }] });
+      const left = db.movements.reduce((sum, movement) => sum + movement.quantity, 0);
+      expect(left).toBe(5 * 210 - 215);
+      expect(db.ledgers.map((ledger) => [ledger.quantity, ledger.vendorPayable])).toEqual([[210, 1260], [5, 30]]);
     });
   });
 });

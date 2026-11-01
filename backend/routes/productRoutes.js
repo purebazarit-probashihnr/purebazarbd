@@ -27,8 +27,8 @@ const optionalPrice = (field) => body(field).optional().isFloat({ min: 0 }).toFl
   .withMessage(`${field} must be zero or greater`);
 
 const pieceRules = [
-  body('unitsPerPackage').optional({ nullable: true }).isInt({ min: 1 }).toInt()
-    .withMessage('unitsPerPackage must be a whole number of 1 or more'),
+  body('unitsPerPackage').optional({ nullable: true }).isFloat({ min: 1 }).toFloat()
+    .withMessage('unitsPerPackage must be 1 or more'),
   body('subUnitPriceOverride').optional({ nullable: true }).isFloat({ min: 0 }).toFloat()
     .withMessage('subUnitPriceOverride must be zero or greater'),
 ];
@@ -36,7 +36,7 @@ const pieceRules = [
 router.get('/', read, productsController.listProducts);
 router.post('/', write, [
   name, categoryId, unitId, ownerType, vendorPrice, mrp,
-  optionalId('brandId'), optionalId('vendorId'), optionalPrice('unitValue'),
+  optionalId('brandId'), optionalId('vendorId'), optionalId('baseUnitId'), optionalPrice('unitValue'),
   body('vatApplicable').optional().isBoolean().toBoolean()
     .withMessage('vatApplicable must be a boolean'),
   optionalPrice('vatRate').custom((value) => value === undefined || value <= 100)
@@ -56,7 +56,7 @@ router.put('/:id', write, [
   optionalPrice('mrp').custom((value, { req }) => (
     value === undefined || req.body.vendorPrice === undefined || value >= Number(req.body.vendorPrice)
   )).withMessage('MRP must be greater than or equal to vendor price'),
-  optionalId('brandId'), optionalId('vendorId'), optionalPrice('unitValue'),
+  optionalId('brandId'), optionalId('vendorId'), optionalId('baseUnitId'), optionalPrice('unitValue'),
   body('vatApplicable').optional().isBoolean().toBoolean()
     .withMessage('vatApplicable must be a boolean'),
   optionalPrice('vatRate').custom((value) => value === undefined || value <= 100)

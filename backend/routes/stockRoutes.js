@@ -19,6 +19,7 @@ const lines = body('lines').isArray({ min: 1 }).withMessage('At least one produc
 const lineProduct = body('lines.*.productId').isMongoId().withMessage('A valid product ID is required');
 const lineQuantity = (field, min) => body(`lines.*.${field}`).isFloat({ min }).toFloat()
   .withMessage(`${field} must be ${min === 0 ? 'zero or greater' : 'greater than zero'}`);
+const lineUnit = body('lines.*.unit').optional().isIn(['PACKAGE', 'BASE']).withMessage('unit must be PACKAGE or BASE');
 const lineQuantities = body('lines').custom((items) => (
   Array.isArray(items) && items.every((item) => (
     Number(item.acceptedQuantity) + Number(item.rejectedQuantity) <= Number(item.receivedQuantity)
@@ -161,7 +162,7 @@ router.post('/goods-receives', write, [
   vendorId,
   body('warehouseId').isMongoId().withMessage('A valid warehouse ID is required'),
   challan,
-  lines, lineProduct,
+  lines, lineProduct, lineUnit,
   lineQuantity('receivedQuantity', 0.000001),
   lineQuantity('acceptedQuantity', 0),
   lineQuantity('rejectedQuantity', 0),
@@ -176,7 +177,7 @@ router.put('/goods-receives/:id', write, [
   body('warehouseId').optional().isMongoId().withMessage('A valid warehouse ID is required'),
   challan,
   body('lines').optional().isArray({ min: 1 }).withMessage('At least one product line is required'),
-  lineProduct.optional(),
+  lineProduct.optional(), lineUnit,
   lineQuantity('receivedQuantity', 0.000001).optional(),
   lineQuantity('acceptedQuantity', 0).optional(),
   lineQuantity('rejectedQuantity', 0).optional(),

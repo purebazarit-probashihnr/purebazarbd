@@ -5,6 +5,8 @@ const goodsReceiveLineSchema = new mongoose.Schema({
   receivedQuantity: { type: Number, required: true, min: 0 },
   acceptedQuantity: { type: Number, required: true, min: 0 },
   rejectedQuantity: { type: Number, required: true, min: 0 },
+  // Quantities are entered per package by default; stock is always stored in base units.
+  unit: { type: String, enum: ['PACKAGE', 'BASE'], default: 'PACKAGE' },
 });
 
 goodsReceiveLineSchema.pre('validate', function validateLineQuantities() {

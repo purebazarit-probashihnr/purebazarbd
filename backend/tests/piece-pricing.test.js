@@ -1,5 +1,5 @@
 const {
-  calculateSubUnitPrice, effectiveSubUnitPrice, linePricing, packageUnitPrice,
+  calculateSubUnitPrice, effectiveSubUnitPrice, linePricing,
 } = require('../utils/piecePricing');
 const { calculateBill } = require('../services/billEngine');
 const { Product } = require('../models');
@@ -34,10 +34,10 @@ describe('margin-safe piece pricing', () => {
     expect(custom.subUnitPrice).toBe(36);
   });
 
-  it('selling all 30 pieces of a BDT 1000 box totals at least BDT 1000', () => {
+  it('selling all 30 pieces of a BDT 1000 box totals at least BDT 1000 and deducts 30 base units', () => {
     const product = { mrp: 1000, vendorPrice: 800, unitsPerPackage: 30 };
     const pricing = linePricing(product, { unit: 'PIECE', quantity: 30 });
-    expect(pricing.stockQuantity).toBe(1);
+    expect(pricing.stockQuantity).toBe(30);
     const bill = calculateBill({
       items: [{
         productId: 'p1', ownerType: 'COMPANY', quantity: 30, mrp: pricing.unitPrice, vendorPrice: pricing.unitVendorPrice,
@@ -46,22 +46,5 @@ describe('margin-safe piece pricing', () => {
     });
     expect(bill.subtotal).toBe(1000.2);
     expect(bill.grandTotal).toBeGreaterThanOrEqual(1000);
-  });
-
-  it('prices a primary package from total MRP and derives piece price from total pieces', () => {
-    const product = {
-      mrp: 1557, vendorPrice: 1200, unitValue: 10, unitsPerPackage: 12,
-    };
-
-    expect(packageUnitPrice(product)).toBe(155.7);
-    expect(linePricing(product, { unit: 'PACKAGE', quantity: 1 })).toMatchObject({
-      unitPrice: 155.7,
-      unitVendorPrice: 120,
-    });
-    expect(linePricing(product, { unit: 'PIECE', quantity: 1 })).toMatchObject({
-      unitPrice: 12.98,
-      unitVendorPrice: 10,
-    });
-    expect(linePricing({ ...product, subUnitPriceOverride: 14.25 }, { unit: 'PIECE', quantity: 1 }).unitPrice).toBe(14.25);
   });
 });

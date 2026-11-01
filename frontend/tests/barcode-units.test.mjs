@@ -7,13 +7,13 @@ const { getUnitOptions } = require('../src/services/barcodeUnits.js');
 const { buildBarcodeLabels } = require('../src/services/barcodeEngine.js');
 
 const product = {
-  name: 'Basmati Rice', barcode: '4006381333931', mrp: 500, unitValue: 5,
+  name: 'Basmati Rice', barcode: '4006381333931', mrp: 500,
   packageUnitName: 'Bag', unitsPerPackage: 10, subUnitPrice: 55,
 };
 
 test('unit options use POS pricing rules', () => {
   const options = getUnitOptions(product);
-  assert.deepEqual(options.map((o) => [o.name, o.price]), [['Bag', 100], ['Pcs', 55]]);
+  assert.deepEqual(options.map((o) => [o.name, o.price]), [['Bag', 500], ['Pcs', 55]]);
 });
 
 test('label shows product name with selected unit and its price', () => {

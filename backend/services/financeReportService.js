@@ -50,16 +50,23 @@ async function vendorProfitability({ from, to } = {}) {
   return { from: from || null, to: to || null, rows, totals };
 }
 
+// Own-stock cost is per package, so base-unit sales are converted back to packages.
+function packagesSold(line, conversion) {
+  if (line.baseQuantity === undefined) return Number(line.quantity);
+  return line.baseQuantity / (conversion.get(String(line.productId)) || 1);
+}
+
 async function profitLoss({ from, to } = {}) {
   const bounds = periodBounds({ from, to });
   const [orders, ledger, products, expenses, categories] = await Promise.all([
     paidOrders(bounds),
     VendorLedger.find({}).lean(),
-    Product.find({}).select('vendorPrice').lean(),
+    Product.find({}).select('vendorPrice unitsPerPackage').lean(),
     Expense.find({}).lean(),
     ExpenseCategory.find({}).lean(),
   ]);
   const cost = new Map(products.map((product) => [String(product._id), cents(product.vendorPrice)]));
+  const conversion = new Map(products.map((product) => [String(product._id), product.unitsPerPackage || 1]));
   const orderIds = new Set(orders.map((order) => String(order._id)));
   const vendorShare = new Map();
   ledger.filter((entry) => entry.entryType === 'SALE' && orderIds.has(String(entry.orderId))).forEach((entry) => {
@@ -74,7 +81,7 @@ async function profitLoss({ from, to } = {}) {
     if (share !== undefined) {
       marginIncome += cents(line.subtotal) - share;
     } else {
-      ownStockMargin += cents(line.subtotal) - Math.round((cost.get(String(line.productId)) || 0) * Number(line.quantity));
+      ownStockMargin += cents(line.subtotal) - Math.round((cost.get(String(line.productId)) || 0) * packagesSold(line, conversion));
     }
   }));
 

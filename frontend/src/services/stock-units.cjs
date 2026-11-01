@@ -1,33 +1,30 @@
-const isMultiUnit = (unitsPerPackage) => Number.isInteger(Number(unitsPerPackage)) && Number(unitsPerPackage) > 1;
+const isMultiUnit = (unitsPerPackage) => Number.isFinite(Number(unitsPerPackage)) && Number(unitsPerPackage) > 1;
+const round6 = (value) => Math.round(value * 1e6) / 1e6;
 
-// Splits a package quantity (possibly fractional) into whole packages and loose pieces.
+// Splits a stored base-unit quantity (pcs, kg) into whole packages and loose base units.
 function splitQuantity(quantity, unitsPerPackage) {
   const value = Number(quantity) || 0;
   if (!isMultiUnit(unitsPerPackage)) return { boxes: value, pieces: 0 };
   const sign = value < 0 ? -1 : 1;
-  const totalPieces = Math.round(Math.abs(value) * Number(unitsPerPackage));
-  return {
-    boxes: sign * Math.floor(totalPieces / unitsPerPackage),
-    pieces: sign * (totalPieces % unitsPerPackage),
-  };
+  const absolute = round6(Math.abs(value));
+  const boxes = Math.floor(round6(absolute / Number(unitsPerPackage)));
+  return { boxes: sign * boxes, pieces: sign * round6(absolute - boxes * Number(unitsPerPackage)) };
 }
 
-// Converts boxes + loose pieces back to the stored package quantity.
+// Converts packages + loose base units back to the stored base-unit quantity.
 function combineQuantity(boxes, pieces, unitsPerPackage) {
   const b = Number(boxes) || 0;
   const p = Number(pieces) || 0;
   if (!isMultiUnit(unitsPerPackage)) return b;
-  return Math.round((b * Number(unitsPerPackage) + p)) / Number(unitsPerPackage);
+  return round6(b * Number(unitsPerPackage) + p);
 }
 
-function formatStock(quantity, unitsPerPackage, packageUnitName) {
+// Shows stock like "15 Box (90 pcs)"; products without a conversion show a plain number.
+function formatStock(quantity, unitsPerPackage, packageUnitName, baseUnitName) {
   const value = Number(quantity) || 0;
-  if (!isMultiUnit(unitsPerPackage)) return String(Math.round(value * 1e6) / 1e6);
-  const name = packageUnitName || 'Box';
-  const { boxes, pieces } = splitQuantity(value, unitsPerPackage);
-  if (!pieces) return `${boxes} ${packageUnitName ? name : 'Box(es)'}`;
-  if (!boxes) return `${pieces} Pcs`;
-  return `${boxes} ${packageUnitName ? name : 'Box(es)'} and ${pieces} Pcs`;
+  if (!isMultiUnit(unitsPerPackage)) return String(round6(value));
+  const { boxes } = splitQuantity(value, unitsPerPackage);
+  return `${boxes} ${packageUnitName || 'Box'} (${round6(value)} ${baseUnitName || 'pcs'})`;
 }
 
 module.exports = { isMultiUnit, splitQuantity, combineQuantity, formatStock };

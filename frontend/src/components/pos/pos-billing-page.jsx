@@ -15,7 +15,7 @@ import {
 import HoldSaleModal from './hold-sale-modal';
 import billingUtils from '@/services/pos-billing-utils.cjs';
 import {
-  STOCK_LIMIT_MESSAGE, availableStock, canSellPieces, clampQuantity, hasStockProblem,
+  STOCK_LIMIT_MESSAGE, allowsFraction, availableStock, canSellPieces, cartShape, clampQuantity, defaultUnit, hasStockProblem,
 } from '@/services/pos-cart-utils.cjs';
 import InvoiceModal from './invoice-modal';
 import ErrorToast from './error-toast';
@@ -110,10 +110,10 @@ export default function PosBillingPage() {
     setSuccessMessage('');
     const stock = Number(product.stock) || 0;
     const existing = itemsRef.current.find((item) => item.productId === String(product.productId));
-    const limit = existing ? availableStock({ ...existing, stock }) : Math.floor(stock);
-    if (limit < 1 || (existing && Number(existing.quantity) >= limit)) {
+    const limit = existing ? availableStock({ ...existing, stock }) : availableStock({ ...cartShape(product, stock), unit: defaultUnit(cartShape(product, stock)) });
+    if (limit <= 0 || (existing && Number(existing.quantity) >= limit)) {
       showToast(STOCK_LIMIT_MESSAGE);
-      if (limit < 1 && !existing) return;
+      if (limit <= 0 && !existing) return;
     }
     setItems((current) => {
       const found = current.find((item) => item.productId === String(product.productId));
@@ -123,19 +123,13 @@ export default function PosBillingPage() {
           ? { ...item, stock, quantity: Number(item.quantity) + 1 }
           : item);
       }
-      if (limit < 1) return current;
+      if (limit <= 0) return current;
+      const shape = cartShape(product, stock);
+      const unit = defaultUnit(shape);
       return [...current, {
-        productId: String(product.productId),
-        name: product.displayName || product.name,
-        barcode: product.barcode,
-        mrp: Number(product.mrp),
-        unitValue: product.unitValue,
-        unitsPerPackage: product.unitsPerPackage,
-        packageUnitName: product.packageUnitName,
-        subUnitPrice: product.subUnitPrice,
-        unit: 'PACKAGE',
-        stock,
-        quantity: 1,
+        ...shape,
+        unit,
+        quantity: unit === 'PIECE' && shape.baseUnitMeasured ? Math.min(1, limit) : 1,
         discount: null,
       }];
     });
@@ -144,14 +138,14 @@ export default function PosBillingPage() {
   function updateQuantity(productId, value) {
     const target = items.find((item) => item.productId === productId);
     if (!target) return;
-    const { quantity, limited } = clampQuantity(value, availableStock(target));
+    const { quantity, limited } = clampQuantity(value, availableStock(target), allowsFraction(target));
     if (limited) showToast(STOCK_LIMIT_MESSAGE);
     setItems((current) => current.map((item) => item.productId === productId ? { ...item, quantity: Math.max(quantity, 1) } : item));
   }
 
   function updateUnit(productId, unit) {
     setItems((current) => current.map((item) => item.productId === productId && canSellPieces(item)
-      ? { ...item, unit, quantity: 1 }
+      ? { ...item, unit, quantity: Math.min(1, Math.max(availableStock({ ...item, unit }), 0)) || 1 }
       : item));
   }
 

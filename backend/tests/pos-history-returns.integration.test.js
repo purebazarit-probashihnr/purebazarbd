@@ -191,15 +191,24 @@ describe('POS history and returns API', () => {
     expect(session.endSession).toHaveBeenCalled();
   });
 
-  it('restores piece sales to stock as fractions of a box', async () => {
+  it('returning 5 pcs restores exactly 5 base units, not the whole box', async () => {
     db.order.lines = [{
-      productId, quantity: 2, unit: 'PIECE', total: 200,
+      productId, quantity: 5, baseQuantity: 5, unit: 'PIECE', total: 200,
     }];
-    models.Product.find.mockReturnValue(query([{ _id: productId, unitsPerPackage: 6 }]));
     const response = await request(app).post(`/api/pos/${orderId}/return`).set(auth()).send({});
 
     expect(response.status).toBe(200);
-    expect(db.movements[0].quantity).toBeCloseTo(2 / 6, 10);
+    expect(db.movements[0].quantity).toBe(5);
+  });
+
+  it('returning 1 box restores its full base quantity', async () => {
+    db.order.lines = [{
+      productId, quantity: 1, baseQuantity: 120, unit: 'PACKAGE', total: 960,
+    }];
+    const response = await request(app).post(`/api/pos/${orderId}/return`).set(auth()).send({});
+
+    expect(response.status).toBe(200);
+    expect(db.movements[0].quantity).toBe(120);
   });
 
   it('blocks a second return without posting duplicate stock or ledger entries', async () => {

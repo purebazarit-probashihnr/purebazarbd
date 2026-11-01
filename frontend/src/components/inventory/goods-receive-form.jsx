@@ -1,5 +1,6 @@
 'use client';
 
+import { formatStock } from '@/services/stock-units.cjs';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -112,6 +113,10 @@ export default function GoodsReceiveForm() {
         productId: product.id,
         productName: product.displayName || product.name,
         barcode: product.barcode,
+        unitsPerPackage: product.unitsPerPackage || 1,
+        packageUnitName: product.packageUnitName,
+        baseUnitName: product.baseUnitName,
+        unit: 'PACKAGE',
         receivedQuantity: 1,
         acceptedQuantity: 1,
         rejectedQuantity: 0,
@@ -122,7 +127,7 @@ export default function GoodsReceiveForm() {
   }
 
   function updateLine(productId, field, value) {
-    const quantity = value === '' ? '' : Number(value);
+    const quantity = field === 'unit' || value === '' ? value : Number(value);
     setLines((current) => current.map((line) => (
       line.productId === productId ? { ...line, [field]: quantity } : line
     )));
@@ -160,6 +165,7 @@ export default function GoodsReceiveForm() {
         warehouseId: location.id,
         lines: lines.map((line) => ({
           productId: line.productId,
+          ...(line.unitsPerPackage > 1 ? { unit: line.unit } : {}),
           receivedQuantity: Number(line.receivedQuantity),
           acceptedQuantity: Number(line.acceptedQuantity),
           rejectedQuantity: Number(line.rejectedQuantity),
@@ -292,8 +298,19 @@ export default function GoodsReceiveForm() {
                   <td>
                     <strong className="block">{line.productName}</strong>
                     <small className="text-slate-500">{line.barcode}</small>
+                    {line.unitsPerPackage > 1 && (
+                      <select
+                        aria-label={`${line.productName} receive unit`}
+                        className="ui-input mt-1 block w-28"
+                        value={line.unit}
+                        onChange={(event) => updateLine(line.productId, 'unit', event.target.value)}
+                      >
+                        <option value="PACKAGE">{line.packageUnitName || 'Package'}</option>
+                        <option value="BASE">{line.baseUnitName || 'Pcs'}</option>
+                      </select>
+                    )}
                   </td>
-                  <td>{stockByProduct.get(line.productId) ?? 0}</td>
+                  <td>{formatStock(stockByProduct.get(line.productId) ?? 0, line.unitsPerPackage, line.packageUnitName, line.baseUnitName)}</td>
                   {['receivedQuantity', 'acceptedQuantity', 'rejectedQuantity'].map((field) => (
                     <td key={field}>
                       <input

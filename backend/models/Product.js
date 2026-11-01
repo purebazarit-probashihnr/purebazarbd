@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { calculateSubUnitPrice, unitQuantityOf, effectiveSubUnitPrice } = require('../utils/piecePricing');
+const { calculateSubUnitPrice, effectiveSubUnitPrice } = require('../utils/piecePricing');
 const { generateEan13Barcode, isValidEan13 } = require('../utils/productIdentifiers');
 
 const productSchema = new mongoose.Schema({
@@ -7,13 +7,14 @@ const productSchema = new mongoose.Schema({
   categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
   brandId: { type: mongoose.Schema.Types.ObjectId, ref: 'Brand' },
   unitId: { type: mongoose.Schema.Types.ObjectId, ref: 'Unit', required: true },
+  baseUnitId: { type: mongoose.Schema.Types.ObjectId, ref: 'Unit' },
   unitValue: { type: Number, min: 0 },
   ownerType: { type: String, enum: ['COMPANY', 'VENDOR'], required: true },
   vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor' },
   vendorPrice: { type: Number, required: true, min: 0 },
   mrp: { type: Number, required: true, min: 0 },
   margin: { type: Number, min: 0 },
-  unitsPerPackage: { type: Number, min: 1, validate: { validator: Number.isInteger, message: 'Units per package must be a whole number' } },
+  unitsPerPackage: { type: Number, min: 1 },
   subUnitPriceOverride: { type: Number, min: 0 },
   subUnitPrice: { type: Number, min: 0 },
   vatApplicable: { type: Boolean, default: false },
@@ -35,9 +36,9 @@ productSchema.pre('validate', function calculateMargin() {
     this.margin = Math.round((this.mrp - this.vendorPrice + Number.EPSILON) * 100) / 100;
   }
   if (this.unitsPerPackage > 1 && Number.isFinite(this.mrp)) {
-    const floor = calculateSubUnitPrice(this.mrp, this.unitsPerPackage, unitQuantityOf(this));
+    const floor = calculateSubUnitPrice(this.mrp, this.unitsPerPackage);
     if (Number.isFinite(this.subUnitPriceOverride) && this.subUnitPriceOverride < floor) {
-      this.invalidate('subUnitPriceOverride', `Piece price cannot be below the margin-safe price of ${floor.toFixed(2)}`);
+      this.invalidate('subUnitPriceOverride', `Base unit price cannot be below the margin-safe price of ${floor.toFixed(2)}`);
     }
     this.subUnitPrice = effectiveSubUnitPrice(this);
   } else {
