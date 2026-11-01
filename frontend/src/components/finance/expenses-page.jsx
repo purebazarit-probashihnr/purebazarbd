@@ -16,6 +16,7 @@ import {
   formatFinanceMoney,
   localDateInput,
 } from './finance-utils';
+import { roundHalfUp } from '@/services/money-format.cjs';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
 
@@ -159,7 +160,7 @@ export default function ExpensesPage() {
               <option value=""><T>{"Select a category"}</T></option>
               {categories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
             </Select>
-            <Input label="Amount (BDT)" name="amount" type="number" min="0.01" step="0.01" required value={form.amount} onChange={(event) => setForm((value) => ({ ...value, amount: event.target.value }))} />
+            <Input label="Amount (BDT)" name="amount" type="number" min="1" step="1" required value={form.amount} onChange={(event) => setForm((value) => ({ ...value, amount: event.target.value }))} />
             <Input label="Expense date" name="expenseDate" type="date" required value={form.expenseDate} onChange={(event) => setForm((value) => ({ ...value, expenseDate: event.target.value }))} />
             <Select label="Location" name="locationId" required value={form.locationId} onChange={(event) => setForm((value) => ({ ...value, locationId: event.target.value }))}>
               <option value=""><T>{"Select a location"}</T></option>
@@ -207,7 +208,7 @@ export default function ExpensesPage() {
         </div>
         {loading ? <p role="status" className="py-8 text-center text-sm text-slate-500"><T>{"Loading expenses..."}</T></p> : (
           <>
-            <div className="mb-3 text-sm text-slate-600">{expenses.length} expenses · <strong>{formatFinanceMoney(expenses.reduce((sum, row) => sum + Math.round((Number(row.amount) + Number.EPSILON) * 100), 0) / 100)}</strong> total</div>
+            <div className="mb-3 text-sm text-slate-600">{expenses.length} expenses · <strong>{formatFinanceMoney(expenses.reduce((sum, row) => sum + roundHalfUp(row.amount), 0))}</strong> total</div>
             <Table columns={columns} rows={expenses} rowKey="_id" emptyMessage="No expenses match these filters." />
           </>
         )}

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const returnLineSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
-  quantity: { type: Number, required: true, min: 0.000001 },
+  quantity: { type: Number, required: true, min: 1, validate: { validator: Number.isInteger, message: 'Quantity must be a whole number' } },
   amount: { type: Number, required: true, min: 0 },
 }, { _id: false });
 

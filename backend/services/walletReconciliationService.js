@@ -1,3 +1,4 @@
+const { roundHalfUp } = require('../utils/money');
 const {
   Order, Shareholder, WalletReconciliation,
 } = require('../models');
@@ -6,8 +7,8 @@ const probashiWalletService = require('./probashiWalletService');
 const DHAKA_OFFSET_MS = 6 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const cents = (value) => Math.round(Number(value) * 100);
-const money = (centValue) => centValue / 100;
+const cents = (value) => roundHalfUp(value || 0);
+const money = (value) => value;
 const dhakaDate = (value) => new Date(new Date(value).getTime() + DHAKA_OFFSET_MS).toISOString().slice(0, 10);
 
 function dayRange(date) {

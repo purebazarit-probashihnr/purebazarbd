@@ -23,7 +23,7 @@ describe('POS screen utilities', () => {
     assert.equal(paymentMethodLabel('BKASH'), 'bKash');
   });
 
-  it('sums money in integer cents', () => {
-    assert.equal(sumMoney([0.1, 0.2, 1.005]), 1.31);
+  it('sums whole-taka amounts rounded half up per line', () => {
+    assert.equal(sumMoney([0.5, 1.5, 2.4]), 5);
   });
 });

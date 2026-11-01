@@ -1,5 +1,8 @@
-const toCents = (value) => Math.round(Number(value || 0) * 100);
-const fromCents = (cents) => cents / 100;
+const { roundHalfUp } = require('../utils/money');
+
+// Salaries, advances and deductions are whole taka.
+const toCents = (value) => roundHalfUp(value || 0);
+const fromCents = (amount) => amount;
 
 // Builds one salary line per employee. Paid, not-yet-deducted advances are
 // deducted oldest first, but only while the running total stays within gross pay;

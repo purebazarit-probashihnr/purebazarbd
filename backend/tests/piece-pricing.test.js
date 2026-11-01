@@ -5,16 +5,16 @@ const { calculateBill } = require('../services/billEngine');
 const { Product } = require('../models');
 
 describe('margin-safe piece pricing', () => {
-  it('rounds the piece price up to the next cent', () => {
-    expect(calculateSubUnitPrice(1000, 30)).toBe(33.34);
+  it('keeps the exact fractional price per base unit', () => {
+    expect(calculateSubUnitPrice(1000, 30)).toBeCloseTo(33.3333333, 6);
     expect(calculateSubUnitPrice(100, 4)).toBe(25);
-    expect(calculateSubUnitPrice(10, 3)).toBe(3.34);
+    expect(calculateSubUnitPrice(10, 3)).toBeCloseTo(3.3333333, 6);
     expect(calculateSubUnitPrice(100, 0)).toBeNull();
   });
 
   it('prefers a manager override over the automatic price', () => {
     const product = { mrp: 1000, unitsPerPackage: 30 };
-    expect(effectiveSubUnitPrice(product)).toBe(33.34);
+    expect(effectiveSubUnitPrice(product)).toBeCloseTo(33.3333333, 6);
     expect(effectiveSubUnitPrice({ ...product, subUnitPriceOverride: 35 })).toBe(35);
     expect(effectiveSubUnitPrice({ mrp: 1000 })).toBeNull();
   });
@@ -26,7 +26,7 @@ describe('margin-safe piece pricing', () => {
     };
     const product = new Product(base);
     await product.validate();
-    expect(product.subUnitPrice).toBe(33.34);
+    expect(product.subUnitPrice).toBeCloseTo(33.3333333, 6);
     const low = new Product({ ...base, subUnitPriceOverride: 33 });
     await expect(low.validate()).rejects.toThrow(/margin-safe/);
     const custom = new Product({ ...base, subUnitPriceOverride: 36 });
@@ -34,7 +34,7 @@ describe('margin-safe piece pricing', () => {
     expect(custom.subUnitPrice).toBe(36);
   });
 
-  it('selling all 30 pieces of a BDT 1000 box totals at least BDT 1000 and deducts 30 base units', () => {
+  it('selling all 30 pieces of a BDT 1000 box totals exactly BDT 1000 and deducts 30 base units', () => {
     const product = { mrp: 1000, vendorPrice: 800, unitsPerPackage: 30 };
     const pricing = linePricing(product, { unit: 'PIECE', quantity: 30 });
     expect(pricing.stockQuantity).toBe(30);
@@ -44,7 +44,7 @@ describe('margin-safe piece pricing', () => {
       }],
       paymentMethod: 'CASH',
     });
-    expect(bill.subtotal).toBe(1000.2);
-    expect(bill.grandTotal).toBeGreaterThanOrEqual(1000);
+    expect(bill.subtotal).toBe(1000);
+    expect(bill.grandTotal).toBe(1000);
   });
 });

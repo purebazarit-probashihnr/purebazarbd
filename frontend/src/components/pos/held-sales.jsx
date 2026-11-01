@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { PauseCircle, X } from 'lucide-react';
 import Button from '@/components/ui/button';
 import { lineTotal } from '@/services/pos-cart-utils.cjs';
+import { formatMoney } from '@/services/money-format.cjs';
 import { T } from '@/i18n/language-provider';
 
 const STORAGE_KEY = 'purebazar.pos.heldSales';
-const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 function readStore() {
   try {
@@ -37,7 +37,7 @@ export function useHeldSales() {
 }
 
 export function estimateTotal(items) {
-  return round2(items.reduce((sum, i) => sum + lineTotal(i), 0));
+  return items.reduce((sum, i) => sum + lineTotal(i), 0);
 }
 
 export function HeldBillsButton({ count, onClick }) {
@@ -67,7 +67,7 @@ export function HeldBillsModal({ held, onRestore, onDiscard, onClose }) {
                   <p className="font-medium text-slate-900">{sale.note || 'No reference'}</p>
                   <p className="text-xs text-slate-500">{new Date(sale.heldAt).toLocaleString()} · {sale.items.length} items · {sale.itemCount} qty</p>
                 </div>
-                <p className="font-semibold">৳{Number(sale.total).toFixed(2)}</p>
+                <p className="font-semibold">{formatMoney(sale.total)}</p>
                 <div className="flex gap-2">
                   <Button type="button" size="sm" variant="secondary" onClick={() => onRestore(sale)}>Restore</Button>
                   {confirmId === sale.id ? (

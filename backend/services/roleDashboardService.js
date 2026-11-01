@@ -1,3 +1,4 @@
+const { roundHalfUp } = require('../utils/money');
 const {
   GoodsReceive, Order, Product, Settings, Shift, StockAdjustment, StockMovement,
 } = require('../models');
@@ -13,8 +14,8 @@ const ADMIN_ROLES = ['Super Admin', 'Owner'];
 const CASHIER_ROLES = ['Cashier', 'Outlet Cashier'];
 const INVENTORY_ROLES = ['Inventory Manager'];
 
-const cents = (value) => Math.round((Number(value) + Number.EPSILON) * 100);
-const money = (totalCents) => totalCents / 100;
+const cents = (value) => roundHalfUp(value || 0);
+const money = (value) => value;
 const sumCents = (items, pick) => items.reduce((sum, item) => sum + cents(pick(item) || 0), 0);
 const soldTime = (order) => new Date(order.soldAt || order.createdAt).getTime();
 
@@ -104,7 +105,7 @@ async function getInventoryDashboard(now, lowStockThreshold = DEFAULT_LOW_STOCK_
   const names = new Map(products.map((product) => [String(product._id), product]));
   const fastMoving = [...sold.entries()]
     .filter(([productId]) => names.has(productId))
-    .map(([productId, total]) => ({ productId, productName: names.get(productId).name, soldQuantity: total / 100 }))
+    .map(([productId, total]) => ({ productId, productName: names.get(productId).name, soldQuantity: total }))
     .sort((a, b) => b.soldQuantity - a.soldQuantity || a.productName.localeCompare(b.productName))
     .slice(0, FAST_MOVING_LIMIT);
 

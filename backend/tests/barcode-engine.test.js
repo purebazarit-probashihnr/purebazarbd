@@ -15,7 +15,7 @@ describe('barcode label output', () => {
     expect(output.tspl.match(/PRINT 1/g)).toHaveLength(2);
     expect(output.tspl).toContain('TEXT 20,6,"3",0,1,1,"PureBazar"');
     expect(output.tspl).toContain('BARCODE 105,62,"EAN13",60,1,0,2,2,"4006381333931"');
-    expect(output.tspl).toContain('TEXT 20,180,"0",0,1,1,"BDT 125.50"');
+    expect(output.tspl).toContain('TEXT 20,180,"0",0,1,1,"BDT 126"');
     expect(escPos.slice(0, 2)).toEqual([0x1b, 0x40]);
     expect(escPos).toContain(0x1d);
     const ean13Command = [0x1d, 0x6b, 0x43, 0x0c, ...'400638133393'.split('').map((digit) => digit.charCodeAt(0))];
@@ -28,7 +28,7 @@ describe('barcode label output', () => {
     const egg = { name: 'Egg', barcode: '4006381333931', mrp: 120, unitsPerPackage: 12, subUnitPrice: 11, packageUnitName: 'Dozen' };
     expect(getUnitOptions(egg).map((o) => [o.name, o.price])).toEqual([['Dozen', 120], ['Pcs', 11]]);
     const output = buildBarcodeLabels([{ ...egg, unitName: 'Pcs', price: 11, originalPrice: 12 }], 'price');
-    expect(output.labels[0]).toMatchObject({ name: 'Egg (Pcs)', price: '11.00', originalPrice: '12.00' });
+    expect(output.labels[0]).toMatchObject({ name: 'Egg (Pcs)', price: '11', originalPrice: '12' });
     expect(output.tspl).toContain('"Egg (Pcs)"');
     expect(output.tspl).toContain('BAR 20,168');
     expect(() => buildBarcodeLabels([{ ...egg, price: 11, originalPrice: 10 }], 'price')).toThrow('must be higher');

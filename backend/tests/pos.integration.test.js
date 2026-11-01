@@ -178,8 +178,8 @@ describe('POS checkout API', () => {
     expect(response.body.bill).toMatchObject({
       subtotal: 100,
       otherDiscountAmount: 10,
-      shareholderDiscountAmount: 4.5,
-      grandTotal: 85.5,
+      shareholderDiscountAmount: 5,
+      grandTotal: 85,
       discountApprovalRequired: true,
     });
   });
@@ -234,14 +234,14 @@ describe('POS checkout API', () => {
     db.movements = [{ productId, warehouseId: outletId, quantity: 180, type: 'GRN' }];
     const pieceResponse = await checkout({
       items: [{ productId: productId.toString(), quantity: 1, unit: 'PIECE' }],
-      payments: [{ method: 'CASH', amount: 129.75 }],
+      payments: [{ method: 'CASH', amount: 130 }],
     });
 
     expect(pieceResponse.status).toBe(201);
     expect(pieceResponse.body.order).toMatchObject({
-      subtotal: 129.75,
-      grandTotal: 129.75,
-      lines: [{ quantity: 1, mrp: 129.75, subtotal: 129.75, baseQuantity: 1 }],
+      subtotal: 130,
+      grandTotal: 130,
+      lines: [{ quantity: 1, mrp: 129.75, subtotal: 130, baseQuantity: 1 }],
     });
     expect(db.movements.at(-1).quantity).toBe(-1);
     expect(db.ledgers.at(-1)).toMatchObject({ quantity: 1, vendorPayable: 100 });

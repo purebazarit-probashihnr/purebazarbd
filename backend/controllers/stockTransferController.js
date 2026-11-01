@@ -279,7 +279,7 @@ async function receiveTransfer(req, res, next) {
       for (const line of transfer.lines) {
         line.receivedQuantity = quantities.get(line.productId.toString());
         line.discrepancyQuantity = Math.abs(line.dispatchedQuantity - line.receivedQuantity);
-        if (line.discrepancyQuantity > 0.000000001) discrepancy = true;
+        if (line.discrepancyQuantity > 0) discrepancy = true;
       }
       transfer.status = discrepancy ? 'Discrepancy' : 'Received';
       transfer.receivedBy = req.user._id;

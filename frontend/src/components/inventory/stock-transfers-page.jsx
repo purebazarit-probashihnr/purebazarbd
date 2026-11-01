@@ -225,7 +225,7 @@ export default function StockTransfersPage() {
                     <span className="text-sm text-slate-600">Requested: {line.requestedQuantity}</span>
                     {selectedTransfer.status !== 'Requested' && <span className="text-sm text-slate-600">Dispatched: {line.dispatchedQuantity}</span>}
                     {editable ? (
-                      <Input label={quantityName} type="number" min="0" step="any" value={quantityDraft[line.productId] ?? currentQuantity ?? initialQuantity} onChange={(event) => setQuantityDraft((current) => ({ ...current, [line.productId]: event.target.value }))} />
+                      <Input label={quantityName} type="number" min="0" step="1" value={quantityDraft[line.productId] ?? currentQuantity ?? initialQuantity} onChange={(event) => setQuantityDraft((current) => ({ ...current, [line.productId]: event.target.value }))} />
                     ) : selectedTransfer.status === 'Received' || selectedTransfer.status === 'Discrepancy' ? (
                       <span className="text-sm text-slate-600">Received: {line.receivedQuantity}</span>
                     ) : null}

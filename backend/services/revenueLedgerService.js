@@ -1,9 +1,10 @@
+const { roundHalfUp } = require('../utils/money');
 const {
   Category, Order, Product, VendorLedger,
 } = require('../models');
 const { periodBounds } = require('./vendorSettlementService');
 
-const cents = (value) => Math.round((Number(value) + Number.EPSILON) * 100);
+const cents = (value) => roundHalfUp(value || 0);
 
 function newRow(categoryId, name) {
   return {
@@ -15,11 +16,11 @@ function format(row) {
   return {
     categoryId: row.categoryId,
     category: row.category,
-    sales: row.salesCents / 100,
-    discounts: row.discountsCents / 100,
-    income: row.incomeCents / 100,
-    returnsAdjustment: row.returnsCents / 100,
-    vat: row.vatCents / 100,
+    sales: row.salesCents,
+    discounts: row.discountsCents,
+    income: row.incomeCents,
+    returnsAdjustment: row.returnsCents,
+    vat: row.vatCents,
   };
 }
 

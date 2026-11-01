@@ -4,6 +4,7 @@ import { WalletCards } from 'lucide-react';
 import Button from '@/components/ui/button';
 import Input from '@/components/ui/input';
 import { T } from '@/i18n/language-provider';
+import { formatWhole, roundHalfUp } from '@/services/money-format.cjs';
 
 const options = [
   ['CASH', 'Cash'],
@@ -11,7 +12,6 @@ const options = [
   ['NAGAD', 'Nagad'],
   ['CARD', 'Card'],
 ];
-const money = (value) => (Number(value) || 0).toFixed(2);
 
 export default function PaymentPanel({
   methods, amounts, total, onMethods, onAmount,
@@ -45,7 +45,7 @@ export default function PaymentPanel({
       </label>
       {selected.includes('WALLET') ? (
         <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
-          <p className="text-emerald-800">5% wallet discount applied. Wallet pays ৳{money(total)}.</p>
+          <p className="text-emerald-800">5% wallet discount applied. Wallet pays ৳{formatWhole(total)}.</p>
         </div>
       ) : (
         <div className="mt-3 space-y-3">
@@ -56,7 +56,7 @@ export default function PaymentPanel({
                 label={`${options.find(([key]) => key === method)?.[1]} amount (৳)`}
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 value={amounts[method] ?? ''}
                 onChange={(event) => onAmount(method, event.target.value)}
               />
@@ -64,8 +64,8 @@ export default function PaymentPanel({
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => onAmount(method, money(total - selected.filter((other) => other !== method)
-                  .reduce((sum, other) => sum + (Number(amounts[other]) || 0), 0)))}
+                onClick={() => onAmount(method, String(roundHalfUp(total - selected.filter((other) => other !== method)
+                  .reduce((sum, other) => sum + (Number(amounts[other]) || 0), 0))))}
               >
                 Set remaining
               </Button>
@@ -77,8 +77,8 @@ export default function PaymentPanel({
               : due === 0
                 ? 'Payment amounts match the bill.'
                 : due > 0
-                  ? `Remaining to allocate: ৳${money(due)}`
-                  : `Overpaid by: ৳${money(Math.abs(due))}`}
+                  ? `Remaining to allocate: ৳${formatWhole(due)}`
+                  : `Overpaid by: ৳${formatWhole(Math.abs(due))}`}
           </p>
         </div>
       )}

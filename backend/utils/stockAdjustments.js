@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const { Product, StockMovement } = require('../models');
+const { roundHalfUp } = require('./money');
+const { conversionOf } = require('./piecePricing');
 
 function statusError(message, status) {
   const error = new Error(message);
@@ -14,17 +16,17 @@ function canManageLocation(user, locationId) {
 }
 
 function adjustmentValue(lines, products) {
-  let cents = 0;
+  let total = 0;
   for (const line of lines) {
     const product = products.get(line.productId.toString());
-    cents += Math.round((Math.abs(line.quantity) * product.vendorPrice + Number.EPSILON) * 100);
+    total += roundHalfUp(Math.abs(line.quantity) * product.vendorPrice / conversionOf(product));
   }
-  return cents / 100;
+  return total;
 }
 
 async function loadProducts(productIds, session) {
   const products = await Product.find({ _id: { $in: productIds } })
-    .select('_id name barcode vendorPrice')
+    .select('_id name barcode vendorPrice unitsPerPackage')
     .session(session)
     .lean();
   if (products.length !== productIds.length) throw statusError('One or more products were not found', 400);
@@ -51,7 +53,7 @@ async function postMovements(adjustment, actorId, session) {
     session,
   );
   for (const line of adjustment.lines) {
-    if ((balances.get(line.productId.toString()) || 0) + line.quantity < -0.000000001) {
+    if ((balances.get(line.productId.toString()) || 0) + line.quantity < 0) {
       throw statusError('An adjustment cannot reduce stock below zero', 409);
     }
   }

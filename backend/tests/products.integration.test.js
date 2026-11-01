@@ -9,7 +9,7 @@ jest.mock('../models', () => ({
   PriceHistory: { create: jest.fn() },
   Product: { create: jest.fn(), find: jest.fn(), findById: jest.fn() },
   Settings: { findOne: jest.fn() },
-  Unit: { exists: jest.fn(), find: jest.fn() },
+  Unit: { exists: jest.fn(), find: jest.fn(), findById: jest.fn() },
   User: { findById: jest.fn() },
   Vendor: { exists: jest.fn() },
 }));
@@ -78,6 +78,7 @@ describe('product endpoints', () => {
     Category.exists.mockResolvedValue(true);
     Brand.exists.mockResolvedValue(true);
     Unit.exists.mockResolvedValue(true);
+    Unit.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ _id: unitId, name: 'Box', abbreviation: 'Box' }) }) });
     Vendor.exists.mockResolvedValue(true);
     AuditLog.create.mockResolvedValue({});
     PriceHistory.create.mockResolvedValue({});
@@ -134,6 +135,17 @@ describe('product endpoints', () => {
     expect(AuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
       action: 'CREATE', entity: 'Product',
     }));
+  });
+
+  it('fills 12 pieces for a Dozen product without asking for pieces per package', async () => {
+    Unit.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ _id: unitId, name: 'Dozen', abbreviation: 'doz' }) }) });
+    Product.create.mockImplementation(async (input) => ({ ...product, ...input, margin: input.mrp - input.vendorPrice }));
+    const created = await request(app).post('/api/products').set(auth).send({
+      name: 'Eggs', categoryId, unitId, ownerType: 'COMPANY', vendorPrice: 95, mrp: 100,
+    });
+    expect(created.status).toBe(201);
+    expect(Product.create).toHaveBeenCalledWith(expect.objectContaining({ unitsPerPackage: 12 }));
+    expect(created.body.product.unitsPerPackage).toBe(12);
   });
 
   it('records price history and an audit event when an authorized user changes prices', async () => {

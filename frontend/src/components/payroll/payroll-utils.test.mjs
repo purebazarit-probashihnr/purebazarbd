@@ -5,7 +5,7 @@ import {
 } from './payroll-utils.mjs';
 
 test('formats payroll money to two decimals', () => {
-  assert.match(formatPayrollMoney(12), /12\.00/);
+  assert.match(formatPayrollMoney(12), /^৳12$/);
 });
 
 test('formats valid dates and handles invalid dates', () => {

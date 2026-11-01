@@ -6,6 +6,7 @@ import { useSelector } from 'react-redux';
 import { Badge, Button, Card, Input, Table } from '@/components/ui';
 import { getWalletLogs } from '@/services/shareholder';
 import { formatFinanceMoney, localDateInput } from '@/components/finance/finance-utils';
+import { roundHalfUp } from '@/services/money-format.cjs';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
 
@@ -43,11 +44,11 @@ export default function WalletBillLogPage() {
   }, [canRead, filters, reload, token]);
 
   const totals = useMemo(() => logs.reduce((sum, log) => {
-    const cents = Math.round((Number(log.amount) + Number.EPSILON) * 100);
+    const whole = roundHalfUp(log.amount);
     return {
       count: sum.count + 1,
-      debit: sum.debit + (log.type === 'DEBIT' ? cents : 0),
-      refund: sum.refund + (log.type === 'REFUND' ? cents : 0),
+      debit: sum.debit + (log.type === 'DEBIT' ? whole : 0),
+      refund: sum.refund + (log.type === 'REFUND' ? whole : 0),
     };
   }, { count: 0, debit: 0, refund: 0 }), [logs]);
 
@@ -101,8 +102,8 @@ export default function WalletBillLogPage() {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card title="Wallet entries"><p className="text-2xl font-semibold">{totals.count}</p></Card>
-        <Card title="Debits"><p className="text-xl font-semibold">{formatFinanceMoney(totals.debit / 100)}</p></Card>
-        <Card title="Refunds"><p className="text-xl font-semibold">{formatFinanceMoney(totals.refund / 100)}</p></Card>
+        <Card title="Debits"><p className="text-xl font-semibold">{formatFinanceMoney(totals.debit)}</p></Card>
+        <Card title="Refunds"><p className="text-xl font-semibold">{formatFinanceMoney(totals.refund)}</p></Card>
       </div>
 
       <Card title="Wallet activity" description={`Showing up to 500 entries for ${filters.date}${filters.memberId ? ` · member ${filters.memberId}` : ''}.`}>

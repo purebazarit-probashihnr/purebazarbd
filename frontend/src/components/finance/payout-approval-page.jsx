@@ -6,7 +6,7 @@ import { useSelector } from 'react-redux';
 import { Badge, Button, Card, Table } from '@/components/ui';
 import { getVendorStatements, getVendors } from '@/services/vendor';
 import { approvePayoutBatch } from '@/services/finance';
-import { formatFinanceDate, formatFinanceMoney, sumMoneyCents } from './finance-utils';
+import { formatFinanceDate, formatFinanceMoney, sumWholeMoney } from './finance-utils';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
 
@@ -51,7 +51,7 @@ export default function PayoutApprovalPage() {
   }, [canRead, reload, token]);
 
   const selectedIds = useMemo(() => new Set(selected), [selected]);
-  const selectedCents = sumMoneyCents(
+  const selectedTotal = sumWholeMoney(
     drafts.filter((row) => selectedIds.has(row._id)),
     'netPayable',
   );
@@ -119,7 +119,7 @@ export default function PayoutApprovalPage() {
         {!canWrite && <p className="mb-3 text-sm text-slate-500"><T>{"You have read-only access. Payout approval permission is required to approve statements."}</T></p>}
         {loading ? <p role="status" className="py-8 text-center text-sm text-slate-500"><T>{"Loading draft statements..."}</T></p> : (
           <>
-            <p className="mb-3 text-sm text-slate-600">{drafts.length} drafts · <strong>{formatFinanceMoney(selectedCents / 100)}</strong> selected for approval (maximum 100 per batch)</p>
+            <p className="mb-3 text-sm text-slate-600">{drafts.length} drafts · <strong>{formatFinanceMoney(selectedTotal)}</strong> selected for approval (maximum 100 per batch)</p>
             <Table columns={columns} rows={drafts} rowKey="_id" emptyMessage="There are no draft statements awaiting approval." />
           </>
         )}

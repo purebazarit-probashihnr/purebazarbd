@@ -2,9 +2,9 @@ const mongoose = require('mongoose');
 
 const goodsReceiveLineSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
-  receivedQuantity: { type: Number, required: true, min: 0 },
-  acceptedQuantity: { type: Number, required: true, min: 0 },
-  rejectedQuantity: { type: Number, required: true, min: 0 },
+  receivedQuantity: { type: Number, required: true, min: 0, validate: { validator: Number.isInteger, message: 'Quantity must be a whole number' } },
+  acceptedQuantity: { type: Number, required: true, min: 0, validate: { validator: Number.isInteger, message: 'Quantity must be a whole number' } },
+  rejectedQuantity: { type: Number, required: true, min: 0, validate: { validator: Number.isInteger, message: 'Quantity must be a whole number' } },
   // Quantities are entered per package by default; stock is always stored in base units.
   unit: { type: String, enum: ['PACKAGE', 'BASE'], default: 'PACKAGE' },
 });

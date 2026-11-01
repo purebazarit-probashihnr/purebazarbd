@@ -1,8 +1,9 @@
 const mongoose = require('mongoose');
+const { roundHalfUp } = require('../utils/money');
 
 const salaryAdvanceSchema = new mongoose.Schema({
   employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
-  amount: { type: Number, required: true, min: 0, set: (value) => Number(Number(value).toFixed(2)) },
+  amount: { type: Number, required: true, min: 0, set: roundHalfUp },
   requestedAt: { type: Date, default: Date.now, required: true },
   reason: { type: String, required: true, trim: true },
   status: { type: String, enum: ['Draft', 'Approved', 'Paid', 'Rejected'], default: 'Draft', required: true },

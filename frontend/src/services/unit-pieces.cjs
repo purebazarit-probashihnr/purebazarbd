@@ -1,16 +1,16 @@
-const DOZEN_KEYS = ['doz', 'dozen', 'dzn'];
+const { fixedPackageSize } = require('./stock-units.cjs');
 
-// Convenience default only; the user can always change it.
+// Dozen fixes the number at 12; the form never asks for it. Other units return '' (the number is required).
 function defaultPiecesPerPackage(unit) {
   if (!unit) return '';
-  const keys = [unit.name, unit.abbreviation].map((v) => String(v || '').trim().toLowerCase().replace(/\.$/, ''));
-  return keys.some((key) => DOZEN_KEYS.includes(key)) ? '12' : '';
+  const fixed = fixedPackageSize(unit.name, unit.abbreviation);
+  return fixed ? String(fixed) : '';
 }
 
-// Base units per package; returns '' unless it is a number above 1.
+// Base units per package; returns '' unless it is a whole number above 1.
 function totalPieces(piecesPerPackage) {
   const per = Number(piecesPerPackage);
-  if (piecesPerPackage === '' || !Number.isFinite(per) || per <= 1) return '';
+  if (piecesPerPackage === '' || !Number.isInteger(per) || per <= 1) return '';
   return String(per);
 }
 

@@ -1,3 +1,5 @@
+const { roundHalfUp } = require('./money-format.cjs');
+
 const BRAND_NAME = 'PureBazar';
 
 const EAN_LEFT = [
@@ -52,7 +54,7 @@ function labelName(name, unitName) {
 function formatPrice(value) {
   const price = Number(value);
   if (!Number.isFinite(price) || price < 0) throw new Error('Each price label needs a valid product price.');
-  return (Math.round((price + Number.EPSILON) * 100) / 100).toFixed(2);
+  return String(roundHalfUp(price));
 }
 
 function normalizeLabels(items, labelType) {

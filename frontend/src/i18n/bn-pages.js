@@ -34,6 +34,8 @@ const pages = {
   'Category name': 'ক্যাটাগরির নাম',
   'Logo': 'লোগো',
   'Quick Add': 'দ্রুত যোগ',
+  'Also sell as': 'এভাবেও বিক্রি করুন',
+  'Add unit': 'একক যোগ করুন',
   'Quick add brand': 'দ্রুত ব্র্যান্ড যোগ',
   'Quick add category': 'দ্রুত ক্যাটাগরি যোগ',
   'Quick add unit': 'দ্রুত একক যোগ',

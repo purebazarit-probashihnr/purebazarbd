@@ -66,7 +66,7 @@ describe('payroll API', () => {
   });
 
   it('manages employees with validation and unique codes', async () => {
-    expect(alice.baseSalary).toBe(30000.56);
+    expect(alice.baseSalary).toBe(30001);
     expect((await post('/api/payroll/employees', { employeeCode: 'E1', name: 'X', baseSalary: 1 })).status).toBe(409);
     expect((await post('/api/payroll/employees', { name: 'No code', baseSalary: -1 })).status).toBe(400);
     const patched = await request(app).patch(`/api/payroll/employees/${bob._id}`).set(auth).send({ status: 'INACTIVE' });
@@ -89,8 +89,8 @@ describe('payroll API', () => {
   });
 
   it('deducts paid advances once, oldest first, within gross pay', async () => {
-    await paidAdvance(alice._id, 1000.1, '2026-08-01');
-    await paidAdvance(alice._id, 2000.2, '2026-08-02');
+    await paidAdvance(alice._id, 1000, '2026-08-01');
+    await paidAdvance(alice._id, 2000, '2026-08-02');
     await paidAdvance(bob._id, 25000, '2026-08-03');
     const draft = await post('/api/payroll/advances', { employeeId: bob._id, amount: 100, reason: 'unpaid' });
     expect(draft.status).toBe(201);
@@ -98,11 +98,11 @@ describe('payroll API', () => {
     const sheet = (await post('/api/payroll/sheets', { month: '2026-08' })).body.sheet;
     const aliceLine = sheet.lines.find((l) => l.employeeId === alice._id);
     const bobLine = sheet.lines.find((l) => l.employeeId === bob._id);
-    expect(aliceLine.advanceDeduction).toBe(3000.3);
-    expect(aliceLine.netAmount).toBe(27000.26);
+    expect(aliceLine.advanceDeduction).toBe(3000);
+    expect(aliceLine.netAmount).toBe(27001);
     expect(bobLine.advanceDeduction).toBe(0);
     expect(bobLine.netAmount).toBe(20000);
-    expect(sheet.totalAmount).toBe(47000.26);
+    expect(sheet.totalAmount).toBe(47001);
 
     await post(`/api/payroll/sheets/${sheet._id}/approve`);
     const next = (await post('/api/payroll/sheets', { month: '2026-09' })).body.sheet;
@@ -115,7 +115,7 @@ describe('payroll API', () => {
     const sheet = (await post('/api/payroll/sheets', { month: '2026-08' })).body.sheet;
     const url = `/api/payroll/sheets/${sheet._id}/lines/${bob._id}`;
     const ok = await request(app).patch(url).set(auth).send({ allowances: 500.5, otherDeductions: 100.25 });
-    expect(ok.body.sheet.lines.find((l) => l.employeeId === bob._id).netAmount).toBe(20400.25);
+    expect(ok.body.sheet.lines.find((l) => l.employeeId === bob._id).netAmount).toBe(20401);
     expect((await request(app).patch(url).set(auth).send({ otherDeductions: 999999 })).status).toBe(400);
     await post(`/api/payroll/sheets/${sheet._id}/approve`);
     expect((await request(app).patch(url).set(auth).send({ allowances: 1 })).status).toBe(409);
@@ -138,7 +138,7 @@ describe('payroll API', () => {
     expect(paid.body.sheet.status).toBe('Paid');
     expect(stores.Expense).toHaveLength(1);
     const [expense] = stores.Expense;
-    expect(expense.amount).toBe(49000.56);
+    expect(expense.amount).toBe(49001);
     expect(expense.sourceType).toBe('SALARY_SHEET');
     expect(String(expense.sourceId)).toBe(sheet._id);
     expect(String(paid.body.sheet.expenseId)).toBe(String(expense._id));
@@ -156,7 +156,7 @@ describe('payroll API', () => {
     const res = await request(app).get(`/api/payroll/sheets/${sheet._id}/payslips/${alice._id}`).set(auth);
     expect(res.status).toBe(200);
     expect(res.body.payslip).toMatchObject({
-      month: '2026-08', gross: 30000.56, advanceDeduction: 1500, totalDeductions: 1500, netAmount: 28500.56,
+      month: '2026-08', gross: 30001, advanceDeduction: 1500, totalDeductions: 1500, netAmount: 28501,
     });
     expect(res.body.payslip.employee.name).toBe('Alice');
     expect(res.body.payslip.advances).toHaveLength(1);

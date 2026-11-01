@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const {
   AuditLog, GoodsReceive, Location, Product, StockMovement, Vendor,
 } = require('../models');
-const { unitLabelMap, displayFields } = require('../utils/productDisplay');
+const { unitLabelMap, displayFields, stockLabelFor } = require('../utils/productDisplay');
 const { toBaseQuantity } = require('../utils/piecePricing');
 
 function statusError(message, status) {
@@ -113,7 +113,7 @@ async function searchProducts(req, res, next) {
         filter._id = { $in: grouped.filter(({ quantity }) => quantity > 0).map(({ _id }) => _id) };
       }
     }
-    let productQuery = Product.find(filter)    .select('_id name unitId baseUnitId unitsPerPackage barcode ownerType vendorId')
+    let productQuery = Product.find(filter)    .select('_id name unitId baseUnitId unitsPerPackage sellingUnits barcode ownerType vendorId')
       .sort({ name: 1 });
     if (warehouseId) productQuery = productQuery.limit(Math.min(Number(req.query.limit) || 10, 10));
     const products = await productQuery.lean();
@@ -128,7 +128,10 @@ async function searchProducts(req, res, next) {
         barcode: product.barcode,
         ownerType: product.ownerType,
         vendorId: product.vendorId?.toString() || null,
-        ...(warehouseId ? { stockQuantity: stockByProduct.get(product._id.toString()) || 0 } : {}),
+        ...(warehouseId ? {
+          stockQuantity: stockByProduct.get(product._id.toString()) || 0,
+          stockLabel: stockLabelFor(product, displayFields(product, labels), stockByProduct.get(product._id.toString()) || 0),
+        } : {}),
       })),
     });
   } catch (error) {

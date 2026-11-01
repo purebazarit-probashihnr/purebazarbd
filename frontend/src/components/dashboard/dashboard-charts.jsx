@@ -13,8 +13,7 @@ const METHOD_COLORS = { CASH: GREEN, BKASH: '#E2136E', NAGAD: ORANGE, CARD: '#3B
 const METHOD_NAMES = { CASH: 'Cash', BKASH: 'bKash', NAGAD: 'Nagad', CARD: 'Card', WALLET: 'Wallet' };
 const AXIS = { fontSize: 11, fill: 'var(--muted)' };
 
-const full = new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT', maximumFractionDigits: 2 });
-const compact = new Intl.NumberFormat('en-BD', { notation: 'compact', maximumFractionDigits: 1 });
+import { formatMoney, formatWhole } from '@/services/money-format.cjs';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function shortLabel(label) {
@@ -32,7 +31,7 @@ function ChartTooltip({ active, payload, label }) {
         <div key={item.dataKey || item.name}>
           <i style={{ background: item.color || item.payload?.fill }} />
           <span>{item.name}</span>
-          <b>{full.format(item.value)}</b>
+          <b>{formatMoney(item.value)}</b>
         </div>
       ))}
     </div>
@@ -68,7 +67,7 @@ export function SalesTrendChart({ trend }) {
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
             <XAxis dataKey="label" tickFormatter={shortLabel} tick={AXIS} tickLine={false} axisLine={false} minTickGap={16} />
-            <YAxis tickFormatter={(v) => compact.format(v)} tick={AXIS} tickLine={false} axisLine={false} width={44} />
+            <YAxis tickFormatter={(v) => formatWhole(v)} tick={AXIS} tickLine={false} axisLine={false} width={64} />
             <Tooltip content={<ChartTooltip />} />
             <Area type="monotone" dataKey="sales" name="Sales" stroke={`url(#${uid}-stroke)`} strokeWidth={3}
               fill={`url(#${uid}-fill)`} activeDot={{ r: 5 }} />
@@ -106,7 +105,7 @@ export function RevenueExpenseBars({ data }) {
         <BarChart data={data || []} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={4}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
           <XAxis dataKey="label" tickFormatter={shortLabel} tick={AXIS} tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={(v) => compact.format(v)} tick={AXIS} tickLine={false} axisLine={false} width={44} />
+          <YAxis tickFormatter={(v) => formatWhole(v)} tick={AXIS} tickLine={false} axisLine={false} width={64} />
           <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(130,195,65,.08)' }} />
           <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 12 }} />
           <Bar dataKey="revenue" name="Revenue" fill={GREEN} radius={[6, 6, 0, 0]} maxBarSize={28} />

@@ -4,11 +4,10 @@ import { Minus, Plus, Trash2 } from 'lucide-react';
 import Input from '@/components/ui/input';
 import Select from '@/components/ui/select';
 import {
-  allowsFraction, availableStock, canSellPieces, isPiece, lineTotal, stockLabel, unitPrice,
+  availableStock, canSellPieces, currentOption, lineTotal, stockLabel, unitKeyOf, unitOptions,
 } from '@/services/pos-cart-utils.cjs';
+import { formatMoney } from '@/services/money-format.cjs';
 import { T } from '@/i18n/language-provider';
-
-const money = (value) => (Number(value) || 0).toFixed(2);
 
 export default function CartPanel({ items, onQuantity, onUnit, onRemove, onDiscount }) {
   return (
@@ -26,7 +25,7 @@ export default function CartPanel({ items, onQuantity, onUnit, onRemove, onDisco
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="truncate font-medium text-slate-900">{item.name}</h3>
-                  <p className="text-xs text-slate-500">{item.barcode} · ৳{money(unitPrice(item))} per {isPiece(item) ? item.baseUnitName || 'pc' : item.packageUnitName || 'box'} · {stockLabel(item)} in stock</p>
+                  <p className="text-xs text-slate-500">{item.barcode} · {formatMoney(currentOption(item).price)} per {currentOption(item).label} · {stockLabel(item)} in stock</p>
                 </div>
                 <button
                   type="button"
@@ -51,9 +50,9 @@ export default function CartPanel({ items, onQuantity, onUnit, onRemove, onDisco
                   <Input
                     label="Qty"
                     type="number"
-                    min={allowsFraction(item) ? '0.001' : '1'}
+                    min="1"
                     max={availableStock(item)}
-                    step={allowsFraction(item) ? '0.001' : '1'}
+                    step="1"
                     value={item.quantity}
                     onChange={(event) => onQuantity(item.productId, event.target.value)}
                     className="w-24"
@@ -71,11 +70,12 @@ export default function CartPanel({ items, onQuantity, onUnit, onRemove, onDisco
                 {canSellPieces(item) && (
                   <Select
                     label="Unit"
-                    value={item.unit || 'PACKAGE'}
+                    value={unitKeyOf(item)}
                     onChange={(event) => onUnit(item.productId, event.target.value)}
                   >
-                    <option value="PACKAGE">{item.packageUnitName || 'Box'}</option>
-                    <option value="PIECE">{item.baseUnitName || 'Pcs'}</option>
+                    {unitOptions(item).map((option) => (
+                      <option key={option.key} value={option.key}>{option.label} · {formatMoney(option.price)}</option>
+                    ))}
                   </Select>
                 )}
                 <Select
@@ -90,7 +90,7 @@ export default function CartPanel({ items, onQuantity, onUnit, onRemove, onDisco
                   label={item.discount?.type === 'FIXED' ? 'Discount (৳)' : 'Discount (%)'}
                   type="number"
                   min="0"
-                  step="0.01"
+                  step="1"
                   value={item.discount?.value ?? ''}
                   onChange={(event) => onDiscount(item.productId, { value: event.target.value })}
                 />
@@ -101,7 +101,7 @@ export default function CartPanel({ items, onQuantity, onUnit, onRemove, onDisco
                   placeholder="Required when discount is applied"
                   maxLength={300}
                 />
-                <strong className="text-right text-slate-900">৳{money(lineTotal(item))}</strong>
+                <strong className="text-right text-slate-900">{formatMoney(lineTotal(item))}</strong>
               </div>
             </li>
           ))}

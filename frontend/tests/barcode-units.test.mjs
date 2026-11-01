@@ -20,7 +20,7 @@ test('label shows product name with selected unit and its price', () => {
   const [piece] = getUnitOptions(product).slice(1);
   const { labels } = buildBarcodeLabels([{ ...product, unitName: piece.name, price: piece.price }], 'price');
   assert.equal(labels[0].name, 'Basmati Rice (Pcs)');
-  assert.equal(labels[0].price, '55.00');
+  assert.equal(labels[0].price, '55');
 });
 
 test('long names keep the unit suffix', () => {

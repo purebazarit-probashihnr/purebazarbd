@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { roundHalfUp } = require('../utils/money');
 
 const attachmentSchema = new mongoose.Schema({
   fileName: { type: String, required: true },
@@ -9,7 +10,7 @@ const attachmentSchema = new mongoose.Schema({
 
 const expenseSchema = new mongoose.Schema({
   categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExpenseCategory', required: true },
-  amount: { type: Number, required: true, min: 0, set: (value) => Number(Number(value).toFixed(2)) },
+  amount: { type: Number, required: true, min: 0, set: roundHalfUp },
   expenseDate: { type: Date, required: true, default: Date.now },
   description: { type: String, required: true, trim: true },
   paymentMethod: { type: String, enum: ['Cash', 'Bank', 'bKash', 'Nagad', 'Card'], required: true },

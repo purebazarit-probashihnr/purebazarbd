@@ -22,7 +22,7 @@ const shiftSchema = new mongoose.Schema({
 
 shiftSchema.pre('validate', function calculateCashDifference() {
   if (Number.isFinite(this.expectedCash) && Number.isFinite(this.actualCash)) {
-    this.cashDifference = Number((this.actualCash - this.expectedCash).toFixed(2));
+    this.cashDifference = Math.round(this.actualCash - this.expectedCash);
   }
   if (this.status === 'CLOSED') {
     if (!this.closedAt) this.invalidate('closedAt', 'Close date is required for a closed shift');

@@ -124,7 +124,7 @@ export default function EmployeesPage() {
           <form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" onSubmit={submitEmployee}>
             <Input label="Employee code" name="employeeCode" required maxLength={50} value={form.employeeCode} onChange={(event) => setForm({ ...form, employeeCode: event.target.value })} />
             <Input label="Full name" name="name" required maxLength={150} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-            <Input label="Base salary (BDT)" name="baseSalary" type="number" min="0" step="0.01" required value={form.baseSalary} onChange={(event) => setForm({ ...form, baseSalary: event.target.value })} />
+            <Input label="Base salary (BDT)" name="baseSalary" type="number" min="0" step="1" required value={form.baseSalary} onChange={(event) => setForm({ ...form, baseSalary: event.target.value })} />
             <Input label="Phone" name="phone" maxLength={30} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
             <Input label="Email" name="email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
             <Input label="Designation" name="designation" maxLength={100} value={form.designation} onChange={(event) => setForm({ ...form, designation: event.target.value })} />

@@ -7,16 +7,13 @@ import { Badge, Button, Card, Input, Select, Table } from '@/components/ui';
 import { getShareholderPurchases, searchShareholders } from '@/services/shareholder';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
+import { formatMoney } from '@/services/money-format.cjs';
 
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
 const formatDate = (value) => new Intl.DateTimeFormat('en-BD', {
   dateStyle: 'medium',
   timeStyle: 'short',
 }).format(new Date(value));
-const formatMoney = (value) => new Intl.NumberFormat('en-BD', {
-  style: 'currency',
-  currency: 'BDT',
-}).format(Number(value) || 0);
 
 function shareholderStatus(shareholder) {
   const statuses = {

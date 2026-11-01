@@ -5,7 +5,7 @@ const vendorLedgerSchema = new mongoose.Schema({
   orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: true },
   returnId: { type: mongoose.Schema.Types.ObjectId, ref: 'Return' },
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
-  quantity: { type: Number, required: true, min: 0.000001 },
+  quantity: { type: Number, required: true, min: 1, validate: { validator: Number.isInteger, message: 'Quantity must be a whole number' } },
   entryType: { type: String, enum: ['SALE', 'RETURN'], required: true },
   vendorPayable: { type: Number, required: true, min: 0 },
   companyNet: { type: Number, required: true },

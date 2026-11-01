@@ -1,10 +1,9 @@
 const Joi = require('joi');
 const {
-  Category, Product, Settings, Unit,
+  Category, Product, Settings,
 } = require('../models');
 const { calculateBill } = require('./billEngine');
 const { linePricing } = require('../utils/piecePricing');
-const { isCountedUnit } = require('../utils/productDisplay');
 
 const methods = ['CASH', 'BKASH', 'NAGAD', 'CARD', 'WALLET'];
 const manualDiscountSchema = Joi.object({
@@ -21,8 +20,9 @@ const manualDiscountSchema = Joi.object({
 const billSchema = Joi.object({
   items: Joi.array().min(1).items(Joi.object({
     productId: Joi.string().hex().length(24).lowercase().required(),
-    quantity: Joi.number().positive().required(),
-    unit: Joi.string().valid('PACKAGE', 'PIECE'),
+    quantity: Joi.number().integer().min(1).required(),
+    unit: Joi.string().valid('PACKAGE', 'PIECE', 'EXTRA'),
+    unitName: Joi.string().trim().max(40),
     discount: manualDiscountSchema.optional(),
   }).unknown(false)).required(),
   payments: Joi.array().min(1).items(Joi.object({
@@ -83,18 +83,10 @@ async function loadBill(body, user, settingsInput) {
 
   const wallet = selected[0] === 'WALLET';
   const settings = settingsInput || await loadSettings();
-  const baseUnitIds = [...new Set(products.map((product) => product.baseUnitId?.toString()).filter(Boolean))];
-  const baseUnits = baseUnitIds.length ? await Unit.find({ _id: { $in: baseUnitIds } }).lean() : [];
-  // Counted units (pcs, dozen) must be whole; measured units (kg, litre) may be fractional.
-  const measuredUnits = new Set(baseUnits
-    .filter((unit) => !isCountedUnit(unit.abbreviation, unit.name))
-    .map((unit) => unit._id.toString()));
   const pricing = body.items.map((item) => {
     const linePrice = linePricing(productsById.get(item.productId), item);
-    if (!linePrice) throw statusError('Product cannot be sold by the piece');
-    const product = productsById.get(item.productId);
-    if (item.unit === 'PIECE' && !Number.isInteger(item.quantity) && !measuredUnits.has(product.baseUnitId?.toString())) {
-      throw statusError('Piece quantity must be a whole number');
+    if (!linePrice) {
+      throw statusError(item.unit === 'EXTRA' ? 'Selling unit was not found on the product' : 'Product cannot be sold by the piece');
     }
     return linePrice;
   });

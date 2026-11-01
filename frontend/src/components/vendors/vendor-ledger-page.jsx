@@ -14,6 +14,7 @@ import {
 } from '@/services/vendor';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
+import { formatMoney } from '@/services/money-format.cjs';
 
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
 const today = new Date().toISOString().slice(0, 10);
@@ -23,11 +24,6 @@ const monthEnd = (month) => {
   const [year, number] = month.split('-').map(Number);
   return new Date(Date.UTC(year, number, 0)).toISOString().slice(0, 10);
 };
-const money = (amount) => new Intl.NumberFormat('en-BD', {
-  style: 'currency',
-  currency: 'BDT',
-  minimumFractionDigits: 2,
-}).format(Number(amount) || 0);
 const date = (value) => {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime())
@@ -196,8 +192,8 @@ export default function VendorLedgerPage() {
       {selectedVendor && (
         <div className="grid gap-4 sm:grid-cols-3">
           <Card title="Units sold"><p className="text-2xl font-semibold text-slate-900">{ledger?.totals?.sales ?? '—'}</p><p className="mt-1 text-xs text-slate-500"><T>{"Sales in selected ledger period"}</T></p></Card>
-          <Card title="Vendor earnings"><p className="text-2xl font-semibold text-slate-900">{money(ledger?.totals?.vendorPayable)}</p><p className="mt-1 text-xs text-slate-500"><T>{"Payable at vendor-price snapshots"}</T></p></Card>
-          <Card title="Company margin"><p className="text-2xl font-semibold text-slate-900">{money(ledger?.totals?.companyMargin)}</p><p className="mt-1 text-xs text-slate-500"><T>{"Net margin from selected sales"}</T></p></Card>
+          <Card title="Vendor earnings"><p className="text-2xl font-semibold text-slate-900">{formatMoney(ledger?.totals?.vendorPayable)}</p><p className="mt-1 text-xs text-slate-500"><T>{"Payable at vendor-price snapshots"}</T></p></Card>
+          <Card title="Company margin"><p className="text-2xl font-semibold text-slate-900">{formatMoney(ledger?.totals?.companyMargin)}</p><p className="mt-1 text-xs text-slate-500"><T>{"Net margin from selected sales"}</T></p></Card>
         </div>
       )}
 
@@ -210,7 +206,7 @@ export default function VendorLedgerPage() {
                 {(ledger?.entries || []).map((entry) => (
                   <tr key={entry._id}>
                     <td>{date(entry.createdAt)}</td><td>{shortId(entry.orderId)}</td><td>{shortId(entry.productId)}</td>
-                    <td>{entry.quantity}</td><td>{money(entry.vendorPayable)}</td><td>{money(entry.companyNet)}</td>
+                    <td>{entry.quantity}</td><td>{formatMoney(entry.vendorPayable)}</td><td>{formatMoney(entry.companyNet)}</td>
                   </tr>
                 ))}
                 {!ledger?.entries?.length && <tr><td colSpan="6" className="table-empty">{selectedVendor ? 'No sales for this period.' : 'Select a vendor to view ledger entries.'}</td></tr>}
@@ -239,7 +235,7 @@ export default function VendorLedgerPage() {
                     <td><strong>{statement.statementNumber}</strong></td>
                     <td>{date(statement.periodStart)} – {date(statement.periodEnd)}</td>
                     <td>{statement.sales} / {statement.returns}</td>
-                    <td>{money(statement.netPayable)}</td>
+                    <td>{formatMoney(statement.netPayable)}</td>
                     <td><Badge tone={badgeTone(statement.status)}>{statement.status}</Badge></td>
                     <td>
                       <div className="flex flex-wrap gap-2">

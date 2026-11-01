@@ -5,10 +5,9 @@ const {
 } = require('../models');
 const { loadBill, receiptData, statusError } = require('./posBillService');
 const { getDefaultPosOutlet } = require('./posOutletService');
+const { roundHalfUp } = require('../utils/money');
 
-function money(value) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
+const money = roundHalfUp;
 
 function objectOf(value) {
   return value?.toObject ? value.toObject() : value;
@@ -89,8 +88,7 @@ async function commitBill(req, res, next, offline) {
       ]).session(session);
       const available = new Map(stock.map((item) => [item._id.toString(), item.quantity]));
       for (const [productId, quantity] of quantities) {
-        // Tolerance absorbs floating point drift from fractional box deductions.
-        if ((available.get(productId) || 0) + 1e-9 < quantity) {
+        if ((available.get(productId) || 0) < quantity) {
           throw statusError(`Insufficient outlet stock for product ${productId}`, 409);
         }
       }
@@ -106,7 +104,8 @@ async function commitBill(req, res, next, offline) {
             barcode: product.barcode,
             quantity: line.quantity,
             baseQuantity: pricing.stockQuantity,
-            unit: item.unit === 'PIECE' ? 'PIECE' : 'PACKAGE',
+            unit: ['PIECE', 'EXTRA'].includes(item.unit) ? item.unit : 'PACKAGE',
+            ...(item.unit === 'EXTRA' ? { unitName: pricing.unitName } : {}),
             mrp: pricing.unitPrice,
             subtotal: line.subtotal,
             itemDiscountAmount: line.itemDiscountAmount,

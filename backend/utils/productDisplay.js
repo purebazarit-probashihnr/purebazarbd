@@ -1,9 +1,5 @@
 const { Unit } = require('../models');
-
-// Counted units (pcs, dozen) must be sold whole; measured units (kg, litre) may be fractional.
-function isCountedUnit(...names) {
-  return names.some((name) => /^(pcs?|pieces?|dozens?|dz)$/i.test(String(name || '').trim()));
-}
+const { baseUnitName, classifyUnit, formatStock } = require('./units');
 
 function formatDisplayName(name, unitLabel) {
   return unitLabel ? `${name} [${unitLabel}]` : name;
@@ -23,19 +19,28 @@ async function unitLabelMap(products) {
   return labels;
 }
 
-// packageUnitName is the full base unit name (Dozen, Box, Bag...) used for the primary pack unit in POS and stock count.
+// baseKind is WEIGHT (grams), VOLUME (ml) or COUNT (pcs); stock is always held in whole base units.
 function displayFields(product, labels) {
   const key = product.unitId?.toString();
   const unitLabel = labels.get(key) || null;
   const baseKey = product.baseUnitId?.toString();
-  return {
+  const baseKind = baseKey ? classifyUnit(labels.get(baseKey), labels.names?.get(baseKey)).kind : 'COUNT';
+  const fields = {
     baseUnitLabel: labels.get(baseKey) || null,
-    baseUnitName: labels.names?.get(baseKey) || null,
-    baseUnitMeasured: Boolean(baseKey) && !isCountedUnit(labels.get(baseKey), labels.names?.get(baseKey)),
+    baseKind,
+    baseUnitName: baseUnitName(baseKind),
     unitLabel,
     packageUnitName: labels.names?.get(key) || null,
+    sellingUnits: (product.sellingUnits || []).map((unit) => ({ name: unit.name, baseQuantity: unit.baseQuantity })),
     displayName: formatDisplayName(product.name, unitLabel),
   };
+  return fields;
 }
 
-module.exports = { isCountedUnit, formatDisplayName, unitLabelMap, displayFields };
+function stockLabelFor(product, fields, quantity) {
+  return formatStock(quantity, { ...fields, unitsPerPackage: product.unitsPerPackage });
+}
+
+module.exports = {
+  formatDisplayName, unitLabelMap, displayFields, stockLabelFor,
+};

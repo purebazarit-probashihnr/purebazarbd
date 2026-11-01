@@ -211,6 +211,17 @@ describe('POS history and returns API', () => {
     expect(db.movements[0].quantity).toBe(120);
   });
 
+  it('returning 2 dozen + 5 pcs of a crate product restores 29 base units', async () => {
+    db.order.lines = [
+      { productId, quantity: 2, baseQuantity: 24, unit: 'EXTRA', unitName: 'Dozen', total: 240 },
+      { productId, quantity: 5, baseQuantity: 5, unit: 'PIECE', total: 50 },
+    ];
+    const response = await request(app).post(`/api/pos/${orderId}/return`).set(auth()).send({});
+
+    expect(response.status).toBe(200);
+    expect(db.movements.reduce((sum, movement) => sum + movement.quantity, 0)).toBe(29);
+  });
+
   it('blocks a second return without posting duplicate stock or ledger entries', async () => {
     const first = await request(app).post(`/api/pos/${orderId}/return`).set(auth()).send({});
     const second = await request(app).post(`/api/pos/${orderId}/return`).set(auth()).send({});

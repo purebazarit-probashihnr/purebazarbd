@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
@@ -8,6 +8,7 @@ import { DEFAULT_LABEL_SIZE, LABEL_SIZES, buildBarcodeLabels } from '@/services/
 import { getUnitOptions } from '@/services/barcodeUnits';
 import { getProducts } from '@/services/inventory';
 import { downloadOutput, printESC } from '@/utils/print-esc';
+import { formatMoney, roundHalfUp } from '@/services/money-format.cjs';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
 
@@ -69,7 +70,7 @@ export default function BarcodesPage() {
 
   function addProduct(product) {
     const defaultOption = getUnitOptions(product)[0];
-    const defaultPrice = Number(defaultOption.price).toFixed(2);
+    const defaultPrice = String(roundHalfUp(defaultOption.price));
     setQueue((current) => {
       const existing = current.find((item) => item.productId === product.id && item.unit === defaultOption.value
         && item.sellingPrice === defaultPrice && item.originalPrice === '');
@@ -121,7 +122,7 @@ export default function BarcodesPage() {
   const columns = [
     { key: 'name', label: 'Product' },
     { key: 'barcode', label: 'Barcode' },
-    { key: 'mrp', label: 'Price', render: (value) => `৳${Number(value).toFixed(2)}` },
+    { key: 'mrp', label: 'Price', render: (value) => formatMoney(value) },
     { key: 'actions', label: 'Labels', render: (_, product) => <Button size="sm" variant="secondary" onClick={() => addProduct(product)}>Add</Button> },
   ];
 
@@ -163,13 +164,13 @@ export default function BarcodesPage() {
                   <div className="sm:col-span-2"><strong className="block text-sm">{product?.name}</strong><small className="text-slate-500">{product?.barcode}</small></div>
                   <Select label="Unit" name={`unit-${item.key}`} value={item.unit} onChange={(event) => {
                     const next = unitOptions.find((option) => option.value === event.target.value);
-                    updateItem(item.key, { unit: event.target.value, sellingPrice: next ? Number(next.price).toFixed(2) : '', originalPrice: '' });
+                    updateItem(item.key, { unit: event.target.value, sellingPrice: next ? String(roundHalfUp(next.price)) : '', originalPrice: '' });
                   }}>
-                    {unitOptions.map((option) => <option key={option.value} value={option.value}>{option.name} - ৳{Number(option.price).toFixed(2)}</option>)}
+                    {unitOptions.map((option) => <option key={option.value} value={option.value}>{option.name} - {formatMoney(option.price)}</option>)}
                   </Select>
                   <Input label="Copies" type="number" min="1" max="500" step="1" value={item.copies} onChange={(event) => updateItem(item.key, { copies: event.target.value === '' ? '' : Number(event.target.value) })} />
-                  <Input label="Original price (strikethrough)" type="number" min="0" step="0.01" value={item.originalPrice} placeholder="Optional" onChange={numberField('originalPrice')} />
-                  <Input label={`Price (type to override) - per ${unit?.name || 'unit'}`} type="number" min="0" step="0.01" value={item.sellingPrice} placeholder={unit ? Number(unit.price).toFixed(2) : ''} onChange={numberField('sellingPrice')} />
+                  <Input label="Original price (strikethrough)" type="number" min="0" step="1" value={item.originalPrice} placeholder="Optional" onChange={numberField('originalPrice')} />
+                  <Input label={`Price (type to override) - per ${unit?.name || 'unit'}`} type="number" min="0" step="1" value={item.sellingPrice} placeholder={unit ? String(roundHalfUp(unit.price)) : ''} onChange={numberField('sellingPrice')} />
                   <Button type="button" variant="ghost" size="sm" onClick={() => setQueue((current) => current.filter((entry) => entry.key !== item.key))}>Remove</Button>
                 </div>;
               })}

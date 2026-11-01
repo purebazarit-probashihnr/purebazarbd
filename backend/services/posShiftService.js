@@ -4,6 +4,7 @@ const {
 } = require('../models');
 const { resolveOutlet } = require('./posCheckoutService');
 const { statusError } = require('./posBillService');
+const { roundHalfUp } = require('../utils/money');
 
 const PAYMENT_METHODS = [
   ['Cash', 'CASH'],
@@ -15,7 +16,7 @@ const PAYMENT_METHODS = [
 ];
 
 function money(value) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return roundHalfUp(value);
 }
 
 function objectOf(value) {

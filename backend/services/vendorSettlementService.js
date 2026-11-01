@@ -1,12 +1,8 @@
 const { Product, StockMovement, VendorLedger } = require('../models');
+const { roundHalfUp } = require('../utils/money');
 
-function cents(value) {
-  return Math.round((value + Number.EPSILON) * 100);
-}
-
-function money(value) {
-  return cents(value) / 100;
-}
+const cents = roundHalfUp;
+const money = roundHalfUp;
 
 function periodBounds(startDate, endDate) {
   const start = new Date(`${startDate}T00:00:00.000Z`);
@@ -81,8 +77,8 @@ async function getLedger(vendorId, start, endExclusive) {
     entries,
     totals: {
       sales: totals.sales,
-      vendorPayable: totals.vendorPayableCents / 100,
-      companyMargin: totals.companyMarginCents / 100,
+      vendorPayable: totals.vendorPayableCents,
+      companyMargin: totals.companyMarginCents,
     },
   };
 }
@@ -97,10 +93,10 @@ async function generateStatement(vendorId, startDate, endDate) {
   const returnEntries = entries.filter((entry) => entry.entryType === 'RETURN');
   const salesValueAtVendorPrice = salesEntries.reduce(
     (total, entry) => total + cents(entry.vendorPayable), 0,
-  ) / 100;
+  );
   const returnValueAtVendorPrice = returnEntries.reduce(
     (total, entry) => total + cents(entry.vendorPayable), 0,
-  ) / 100;
+  );
 
   return {
     periodStart: start,

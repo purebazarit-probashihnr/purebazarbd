@@ -9,9 +9,9 @@ import {
   paymentMethodLabel, sumMoney,
 } from '@/services/pos-screen-utils.cjs';
 import { T } from '@/i18n/language-provider';
+import { formatMoney } from '@/services/money-format.cjs';
 
-const currency = new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT' });
-const amount = (value) => currency.format(Number(value) || 0);
+const amount = (value) => formatMoney(Number(value) || 0);
 const dateTime = (value) => (value ? new Date(value).toLocaleString() : '—');
 const orderId = (order) => String(order._id || order.id);
 

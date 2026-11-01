@@ -5,10 +5,9 @@ const {
 } = require('../models');
 const { statusError } = require('./posBillService');
 const { resolveOutlet } = require('./posCheckoutService');
+const { roundHalfUp } = require('../utils/money');
 
-function money(value) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
+const money = roundHalfUp;
 
 function objectOf(value) {
   return value?.toObject ? value.toObject() : value;

@@ -3,7 +3,7 @@ const { Product, StockMovement } = require('../models');
 const { statusError } = require('./posBillService');
 const { resolveOutlet } = require('./posCheckoutService');
 const { effectiveSubUnitPrice } = require('../utils/piecePricing');
-const { unitLabelMap, displayFields } = require('../utils/productDisplay');
+const { unitLabelMap, displayFields, stockLabelFor } = require('../utils/productDisplay');
 
 async function stockByProduct(outletId, productIds) {
   if (!productIds.length) return new Map();
@@ -16,20 +16,23 @@ async function stockByProduct(outletId, productIds) {
     },
     { $group: { _id: '$productId', quantity: { $sum: '$quantity' } } },
   ]);
-  return new Map(rows.map((row) => [row._id.toString(), Math.max(0, Math.round(row.quantity * 1e9) / 1e9)]));
+  return new Map(rows.map((row) => [row._id.toString(), Math.max(0, Math.round(row.quantity))]));
 }
 
 function toItem(product, stock, labels = new Map()) {
+  const fields = displayFields(product, labels);
+  const onHand = stock.get(String(product._id)) || 0;
   return {
     productId: product._id,
     name: product.name,
-    ...displayFields(product, labels),
+    ...fields,
     barcode: product.barcode,
     mrp: product.mrp,
     vendorPrice: product.vendorPrice,
     subUnitPrice: effectiveSubUnitPrice(product) ?? undefined,
     unitsPerPackage: product.unitsPerPackage,
-    stock: stock.get(String(product._id)) || 0,
+    stock: onHand,
+    stockLabel: stockLabelFor(product, fields, onHand),
   };
 }
 

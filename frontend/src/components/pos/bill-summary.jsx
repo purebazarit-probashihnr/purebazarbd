@@ -5,8 +5,8 @@ import Button from '@/components/ui/button';
 import Input from '@/components/ui/input';
 import Select from '@/components/ui/select';
 import { T } from '@/i18n/language-provider';
+import { formatWhole } from '@/services/money-format.cjs';
 
-const money = (value) => (Number(value) || 0).toFixed(2);
 
 export default function BillSummary({
   bill, billDiscount, onBillDiscount,
@@ -19,15 +19,15 @@ export default function BillSummary({
         <h2 className="flex items-center gap-2 font-semibold text-slate-900"><ReceiptText size={18} /> <T>{"Bill summary"}</T></h2>
         <div className="mt-4 grid grid-cols-[1fr_auto] gap-y-2 text-sm">
           <span className="text-slate-600"><T>{"Subtotal (MRP)"}</T></span>
-          <span className="text-right">৳{money(bill?.subtotal)}</span>
+          <span className="text-right">৳{formatWhole(bill?.subtotal)}</span>
           <span className="text-slate-600"><T>{"Other discounts"}</T></span>
-          <span className="text-right text-red-700">− ৳{money(bill?.otherDiscountAmount)}</span>
+          <span className="text-right text-red-700">− ৳{formatWhole(bill?.otherDiscountAmount)}</span>
           <span className="text-slate-600"><T>{"Shareholder/Wallet discount (5%)"}</T></span>
-          <span className="text-right text-red-700">− ৳{money(bill?.shareholderDiscountAmount)}</span>
+          <span className="text-right text-red-700">− ৳{formatWhole(bill?.shareholderDiscountAmount)}</span>
           <span className="text-slate-600"><T>{"VAT"}</T></span>
-          <span className="text-right">৳{money(bill?.vatAmount)}</span>
+          <span className="text-right">৳{formatWhole(bill?.vatAmount)}</span>
           <strong className="border-t border-slate-200 pt-3 text-base"><T>{"Total due"}</T></strong>
-          <strong className="border-t border-slate-200 pt-3 text-right text-lg">৳{money(bill?.grandTotal)}</strong>
+          <strong className="border-t border-slate-200 pt-3 text-right text-lg">৳{formatWhole(bill?.grandTotal)}</strong>
         </div>
         {previewLoading && <p role="status" className="mt-3 text-xs text-slate-500"><T>{"Updating bill from server..."}</T></p>}
         {previewError && <p role="alert" className="mt-3 text-sm text-red-700">{previewError}</p>}
@@ -50,7 +50,7 @@ export default function BillSummary({
             label={billDiscount?.type === 'FIXED' ? 'Amount (৳)' : 'Percent (%)'}
             type="number"
             min="0"
-            step="0.01"
+            step="1"
             value={billDiscount?.value ?? ''}
             onChange={(event) => onBillDiscount({ value: event.target.value })}
           />
@@ -80,7 +80,7 @@ export default function BillSummary({
       )}
       {checkoutError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{checkoutError}</p>}
       <Button className="w-full py-3" disabled={!canCheckout || checkoutLoading} onClick={onCheckout}>
-        {checkoutLoading ? 'Completing sale...' : `Complete sale · ৳${money(bill?.grandTotal)}`}
+        {checkoutLoading ? 'Completing sale...' : `Complete sale · ৳${formatWhole(bill?.grandTotal)}`}
       </Button>
     </aside>
   );

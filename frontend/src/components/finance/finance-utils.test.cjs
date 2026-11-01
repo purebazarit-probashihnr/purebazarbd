@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { sumMoneyCents } = require('./finance-utils.js');
+const { sumWholeMoney } = require('./finance-utils.js');
 
-test('sums payout amounts in integer cents', () => {
-  assert.equal(sumMoneyCents([{ payable: 12.34 }, { payable: 0.1 }, { payable: 0.2 }], 'payable'), 1264);
+test('sums payout amounts in whole taka, rounded half up per row', () => {
+  assert.equal(sumWholeMoney([{ payable: 12.5 }, { payable: 0.4 }, { payable: 0.5 }], 'payable'), 14);
 });

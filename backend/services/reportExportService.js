@@ -1,16 +1,25 @@
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
+const { formatMoney, roundHalfUp } = require('../utils/money');
+
+// Amounts and quantities in exports are whole numbers; the PDF font has no taka sign, so only digits are printed.
+const wholeCell = (value) => (typeof value === 'number' ? roundHalfUp(value) : value);
+const pdfCell = (value) => (typeof value === 'number' ? formatMoney(value, { symbol: '' }) : String(value ?? ''));
 
 async function toExcel({ title, columns, rows, totals }) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet(title.slice(0, 31));
   sheet.columns = columns.map((column) => ({ header: column.label, key: column.key, width: column.width || 18 }));
   sheet.getRow(1).font = { bold: true };
-  rows.forEach((row) => sheet.addRow(row));
+  const whole = (row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, wholeCell(value)]));
+  rows.forEach((row) => sheet.addRow(whole(row)));
   if (totals) {
-    const totalRow = sheet.addRow({ [columns[0].key]: 'Total', ...totals });
+    const totalRow = sheet.addRow({ [columns[0].key]: 'Total', ...whole(totals) });
     totalRow.font = { bold: true };
   }
+  sheet.eachRow((row) => row.eachCell((cell) => {
+    if (typeof cell.value === 'number') cell.numFmt = '#,##0';
+  }));
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
@@ -28,7 +37,7 @@ function toPdf({ title, subtitle, columns, rows, totals }) {
       const y = doc.y;
       doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9);
       values.forEach((value, index) => {
-        doc.text(String(value ?? ''), 36 + index * width, y, { width: width - 6, lineBreak: false, ellipsis: true });
+        doc.text(pdfCell(value), 36 + index * width, y, { width: width - 6, lineBreak: false, ellipsis: true });
       });
       doc.y = y + 16;
     };

@@ -1,6 +1,6 @@
 import { Card } from '@/components/ui';
 
-const currency = new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT' });
+import { formatMoney as formatWholeMoney } from '@/services/money-format.cjs';
 
 export const timeFormat = new Intl.DateTimeFormat('en-BD', {
   dateStyle: 'medium',
@@ -8,7 +8,7 @@ export const timeFormat = new Intl.DateTimeFormat('en-BD', {
   timeZone: 'Asia/Dhaka',
 });
 
-export const formatMoney = (amount) => currency.format(Number(amount) || 0);
+export const formatMoney = (amount) => formatWholeMoney(amount);
 
 export function MetricCard({ label, value, description, icon: Icon, badge }) {
   return (

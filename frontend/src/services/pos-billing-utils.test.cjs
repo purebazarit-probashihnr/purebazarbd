@@ -15,7 +15,7 @@ const scannedItem = {
 test('builds a server preview payload with scanned items, discounts, and shareholder', () => {
   const payload = createPreviewPayload(
     [scannedItem],
-    { type: 'FIXED', value: '1.25', reason: 'Bill offer' },
+    { type: 'FIXED', value: '5', reason: 'Bill offer' },
     ['CASH', 'BKASH'],
     { _id: '64b000000000000000000002' },
   );
@@ -27,7 +27,7 @@ test('builds a server preview payload with scanned items, discounts, and shareho
       discount: { type: 'PERCENT', value: 10, reason: 'Promotion' },
     }],
     payments: [{ method: 'CASH' }, { method: 'BKASH' }],
-    billDiscount: { type: 'FIXED', value: 1.25, reason: 'Bill offer' },
+    billDiscount: { type: 'FIXED', value: 5, reason: 'Bill offer' },
     shareholderId: '64b000000000000000000002',
   });
 });
@@ -47,7 +47,11 @@ test('requires reasons for nonzero discounts and rejects percentage values over 
   );
 });
 
-test('rejects invalid quantities and wallet split tenders', () => {
+test('rejects decimal quantities and wallet split tenders', () => {
+  assert.throws(
+    () => createPreviewPayload([{ ...scannedItem, quantity: 1.5 }], null, ['CASH']),
+    /whole number/,
+  );
   assert.throws(
     () => createPreviewPayload([{ ...scannedItem, quantity: 0 }], null, ['CASH']),
     /valid quantity/,
@@ -58,10 +62,11 @@ test('rejects invalid quantities and wallet split tenders', () => {
   );
 });
 
-test('matches split payments in rounded cents and treats wallet as full payment', () => {
-  assert.equal(paymentTotalMatches(['CASH', 'CARD'], { CASH: '10.01', CARD: '8.24' }, 18.25), true);
-  assert.equal(paymentTotalMatches(['CASH', 'CARD'], { CASH: '10', CARD: '8' }, 18.25), false);
-  assert.equal(paymentTotalMatches(['CASH', 'CARD'], { CASH: '18.25', CARD: '0' }, 18.25), false);
-  assert.equal(paymentTotalMatches(['WALLET'], {}, 18.25), true);
+test('matches split payments in whole taka and treats wallet as full payment', () => {
+  assert.equal(paymentTotalMatches(['CASH', 'CARD'], { CASH: '10', CARD: '8' }, 18), true);
+  assert.equal(paymentTotalMatches(['CASH', 'CARD'], { CASH: '10', CARD: '7' }, 18), false);
+  assert.equal(paymentTotalMatches(['CASH', 'CARD'], { CASH: '10.5', CARD: '7.5' }, 18), false);
+  assert.equal(paymentTotalMatches(['CASH', 'CARD'], { CASH: '18', CARD: '0' }, 18), false);
+  assert.equal(paymentTotalMatches(['WALLET'], {}, 18), true);
   assert.equal(paymentTotalMatches([], {}, 0), false);
 });

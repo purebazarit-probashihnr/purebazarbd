@@ -81,8 +81,8 @@ async function listExpenses(req, res, next) {
       .populate('locationId', 'name type')
       .sort({ expenseDate: -1, createdAt: -1 })
       .lean();
-    const totalCents = expenses.reduce((sum, expense) => sum + Math.round(expense.amount * 100), 0);
-    return res.json({ success: true, expenses, total: totalCents / 100 });
+    const totalCents = expenses.reduce((sum, expense) => sum + Math.round(expense.amount), 0);
+    return res.json({ success: true, expenses, total: totalCents });
   } catch (error) {
     return next(error);
   }

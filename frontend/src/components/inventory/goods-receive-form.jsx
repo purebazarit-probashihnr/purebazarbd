@@ -114,6 +114,8 @@ export default function GoodsReceiveForm() {
         productName: product.displayName || product.name,
         barcode: product.barcode,
         unitsPerPackage: product.unitsPerPackage || 1,
+        baseKind: product.baseKind,
+        sellingUnits: product.sellingUnits,
         packageUnitName: product.packageUnitName,
         baseUnitName: product.baseUnitName,
         unit: 'PACKAGE',
@@ -310,20 +312,20 @@ export default function GoodsReceiveForm() {
                       </select>
                     )}
                   </td>
-                  <td>{formatStock(stockByProduct.get(line.productId) ?? 0, line.unitsPerPackage, line.packageUnitName, line.baseUnitName)}</td>
+                  <td>{formatStock(stockByProduct.get(line.productId) ?? 0, line)}</td>
                   {['receivedQuantity', 'acceptedQuantity', 'rejectedQuantity'].map((field) => (
                     <td key={field}>
                       <input
                         aria-label={`${line.productName} ${field}`}
                         className="ui-input w-28"
                         type="number"
-                        min={field === 'receivedQuantity' ? '0.000001' : '0'}
+                        min={field === 'receivedQuantity' ? '1' : '0'}
                         max={field === 'acceptedQuantity'
                           ? Number(line.receivedQuantity || 0) - Number(line.rejectedQuantity || 0)
                           : field === 'rejectedQuantity'
                             ? Number(line.receivedQuantity || 0) - Number(line.acceptedQuantity || 0)
                             : undefined}
-                        step="any"
+                        step="1"
                         value={line[field]}
                         onChange={(event) => updateLine(line.productId, field, event.target.value)}
                       />

@@ -1,13 +1,14 @@
+const { roundHalfUp } = require('../utils/money');
 const DHAKA_OFFSET_MS = 6 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const cents = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100);
-const money = (totalCents) => totalCents / 100;
+const cents = (value) => roundHalfUp(value || 0);
+const money = (value) => value;
 const sumCents = (items, pick) => items.reduce((sum, item) => sum + cents(pick(item)), 0);
 
 // Quantities keep up to 3 decimals (kg, litres) and are summed in thousandths.
-const milli = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 1000);
-const qty = (totalMilli) => totalMilli / 1000;
+const milli = (value) => roundHalfUp(value || 0);
+const qty = (total) => total;
 
 const parseDhakaDate = (value) => {
   const [y, m, d] = value.split('-').map(Number);

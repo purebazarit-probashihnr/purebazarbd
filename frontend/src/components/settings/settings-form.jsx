@@ -162,7 +162,7 @@ export default function SettingsForm() {
           label="Super Admin approval limit"
           type="number"
           min="0"
-          step="0.01"
+          step="1"
           value={settings.stockAdjustmentApprovalLimit}
           onChange={(event) => setField('stockAdjustmentApprovalLimit', Number(event.target.value))}
         />

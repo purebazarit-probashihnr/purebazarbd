@@ -49,8 +49,8 @@ const order = (cashier, grandTotal, payments, number) => ({
 function seed() {
   global.__db = {
     Order: [
-      order(me, 100.1, [{ method: 'CASH', amount: 100.1 }], 'B1'),
-      order(me, 200.2, [{ method: 'BKASH', amount: 100.1 }, { method: 'CARD', amount: 100.1 }], 'B2'),
+      order(me, 100, [{ method: 'CASH', amount: 100 }], 'B1'),
+      order(me, 200, [{ method: 'BKASH', amount: 100 }, { method: 'CARD', amount: 100 }], 'B2'),
       order(other, 5000, [{ method: 'CASH', amount: 5000 }], 'OTHER'),
     ],
     Settings: [{ dailySalesTarget: 1000 }],
@@ -91,11 +91,11 @@ describe('role-specific dashboards', () => {
     role = { name: 'Outlet Cashier', permissions: ['dashboard:read'] };
     const d = await get();
     expect(d.view).toBe('cashier');
-    expect(d.todaySales).toBe(300.3);
+    expect(d.todaySales).toBe(300);
     expect(d.todayBillCount).toBe(2);
     expect(d.targetProgressPercent).toBe(30);
-    expect(d.paymentSplit).toEqual({ cash: 100.1, bkash: 100.1, card: 100.1, other: 0 });
-    expect(d.shift.expectedCash).toBe(600.1);
+    expect(d.paymentSplit).toEqual({ cash: 100, bkash: 100, card: 100, other: 0 });
+    expect(d.shift.expectedCash).toBe(600);
     expect(d.recentBills.map((bill) => bill.orderNumber).sort()).toEqual(['B1', 'B2']);
     ['totalSales', 'marginIncome', 'vendorPayablesDue', 'lowStockAlerts'].forEach((key) => expect(d).not.toHaveProperty(key));
   });
@@ -117,7 +117,7 @@ describe('role-specific dashboards', () => {
     role = { name: 'Super Admin', permissions: ['*'] };
     const d = await get();
     expect(d.view).toBe('admin');
-    expect(d.totalSales).toBe(5300.3);
+    expect(d.totalSales).toBe(5300);
     expect(d.marginIncome).toBe(10);
     expect(d.vendorPayablesDue).toBe(50);
   });
@@ -127,7 +127,7 @@ describe('role-specific dashboards', () => {
     const d = await get();
     expect(d.view).toBe('general');
     expect(d.sections).toEqual(['sales', 'inventory']);
-    expect(d.todaySales).toBe(5300.3);
+    expect(d.todaySales).toBe(5300);
     expect(d.lowStockAlerts).toHaveLength(2);
     expect(d.recentActivity).toEqual([]);
     ['totalSales', 'marginIncome', 'vendorPayablesDue'].forEach((key) => expect(d).not.toHaveProperty(key));

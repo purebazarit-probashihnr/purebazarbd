@@ -1,3 +1,5 @@
+const { roundHalfUp } = require('./money-format.cjs');
+
 const paymentLabels = {
   CASH: 'Cash',
   BKASH: 'bKash',
@@ -21,11 +23,9 @@ function paymentMethodLabel(method) {
   return paymentLabels[method] || method || '—';
 }
 
+// Each amount is a whole taka (half up) so shown lines add up to the total.
 function sumMoney(values) {
-  const cents = values.reduce((total, value) => (
-    total + Math.round(((Number(value) || 0) + Number.EPSILON) * 100)
-  ), 0);
-  return cents / 100;
+  return values.reduce((total, value) => total + roundHalfUp(value), 0);
 }
 
 module.exports = {

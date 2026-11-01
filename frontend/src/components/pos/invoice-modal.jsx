@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { Printer, X } from 'lucide-react';
 import { getCode39Runs } from '@/services/code39.cjs';
 import { T } from '@/i18n/language-provider';
+import { formatWhole } from '@/services/money-format.cjs';
 import './xprinter-print.css';
 
-const money = (value) => (Math.round((Number(value) + Number.EPSILON) * 100) / 100).toFixed(2);
 
 function OrderBarcode({ value }) {
   let runs;
@@ -46,20 +46,20 @@ function Receipt({ receipt }) {
             <tr key={`${line.barcode}-${index}`}>
               <td>{line.productName}</td>
               <td className="r">{line.quantity}</td>
-              <td className="r">{money(line.mrp)}</td>
-              <td className="r">{money(line.total)}</td>
+              <td className="r">{formatWhole(line.mrp)}</td>
+              <td className="r">{formatWhole(line.total)}</td>
             </tr>
           ))}
         </tbody>
       </table>
       <hr />
-      <div className="receipt-row"><span><T>{"Subtotal"}</T></span><span>{money(receipt.subtotal)}</span></div>
-      {Number(receipt.otherDiscountAmount) > 0 && <div className="receipt-row"><span><T>{"Discount"}</T></span><span>-{money(receipt.otherDiscountAmount)}</span></div>}
-      {Number(receipt.shareholderDiscountAmount) > 0 && <div className="receipt-row"><span><T>{"Member discount"}</T></span><span>-{money(receipt.shareholderDiscountAmount)}</span></div>}
-      {Number(receipt.vatAmount) > 0 && <div className="receipt-row"><span><T>{"VAT"}</T></span><span>{money(receipt.vatAmount)}</span></div>}
-      <div className="receipt-row receipt-grand"><span><T>{"TOTAL (BDT)"}</T></span><span>{money(receipt.grandTotal)}</span></div>
+      <div className="receipt-row"><span><T>{"Subtotal"}</T></span><span>{formatWhole(receipt.subtotal)}</span></div>
+      {Number(receipt.otherDiscountAmount) > 0 && <div className="receipt-row"><span><T>{"Discount"}</T></span><span>-{formatWhole(receipt.otherDiscountAmount)}</span></div>}
+      {Number(receipt.shareholderDiscountAmount) > 0 && <div className="receipt-row"><span><T>{"Member discount"}</T></span><span>-{formatWhole(receipt.shareholderDiscountAmount)}</span></div>}
+      {Number(receipt.vatAmount) > 0 && <div className="receipt-row"><span><T>{"VAT"}</T></span><span>{formatWhole(receipt.vatAmount)}</span></div>}
+      <div className="receipt-row receipt-grand"><span><T>{"TOTAL (BDT)"}</T></span><span>{formatWhole(receipt.grandTotal)}</span></div>
       {payments.map((payment) => (
-        <div key={payment.method} className="receipt-row"><span>{payment.method}</span><span>{money(payment.amount)}</span></div>
+        <div key={payment.method} className="receipt-row"><span>{payment.method}</span><span>{formatWhole(payment.amount)}</span></div>
       ))}
       <div className="receipt-center receipt-barcode-wrap">
         <OrderBarcode value={receipt.orderNumber} />

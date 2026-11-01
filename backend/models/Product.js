@@ -14,7 +14,18 @@ const productSchema = new mongoose.Schema({
   vendorPrice: { type: Number, required: true, min: 0 },
   mrp: { type: Number, required: true, min: 0 },
   margin: { type: Number, min: 0 },
-  unitsPerPackage: { type: Number, min: 1 },
+  unitsPerPackage: {
+    type: Number, min: 1, validate: { validator: Number.isInteger, message: 'Pieces per package must be a whole number' },
+  },
+  sellingUnits: {
+    type: [new mongoose.Schema({
+      name: { type: String, required: true, trim: true },
+      baseQuantity: {
+        type: Number, required: true, min: 1, validate: { validator: Number.isInteger, message: 'Base quantity must be a whole number' },
+      },
+    }, { _id: false })],
+    default: undefined,
+  },
   subUnitPriceOverride: { type: Number, min: 0 },
   subUnitPrice: { type: Number, min: 0 },
   vatApplicable: { type: Boolean, default: false },
@@ -37,14 +48,16 @@ productSchema.pre('validate', function calculateMargin() {
   }
   if (this.unitsPerPackage > 1 && Number.isFinite(this.mrp)) {
     const floor = calculateSubUnitPrice(this.mrp, this.unitsPerPackage);
-    if (Number.isFinite(this.subUnitPriceOverride) && this.subUnitPriceOverride < floor) {
-      this.invalidate('subUnitPriceOverride', `Base unit price cannot be below the margin-safe price of ${floor.toFixed(2)}`);
+    if (Number.isFinite(this.subUnitPriceOverride) && this.subUnitPriceOverride < floor - 1e-9) {
+      this.invalidate('subUnitPriceOverride', `Base unit price cannot be below the margin-safe price of ${Math.ceil(floor)}`);
     }
     this.subUnitPrice = effectiveSubUnitPrice(this);
   } else {
     this.subUnitPrice = undefined;
     this.subUnitPriceOverride = undefined;
   }
+  const extraNames = (this.sellingUnits || []).map((unit) => String(unit.name).trim().toLowerCase());
+  if (new Set(extraNames).size !== extraNames.length) this.invalidate('sellingUnits', 'Extra unit names must be unique');
   if (this.ownerType === 'VENDOR' && !this.vendorId) {
     this.invalidate('vendorId', 'Vendor-owned products require a vendor');
   }

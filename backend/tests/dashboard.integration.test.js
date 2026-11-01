@@ -50,20 +50,20 @@ function seed() {
       { _id: p3, name: 'Salt', barcode: '3' },
     ],
     Order: [
-      order(100.10, [{ method: 'CASH', amount: 100.10 }], '2026-03-10T00:30:00+06:00'),
-      order(200.20, [{ method: 'WALLET', amount: 150.15 }, { method: 'BKASH', amount: 50.05 }], '2026-03-10T11:00:00+06:00'),
-      order(0.10, [{ method: 'CASH', amount: 0.10 }], '2026-03-10T23:59:00+06:00'),
-      order(300.30, [{ method: 'CASH', amount: 300.30 }], '2026-03-09T23:59:00+06:00'),
+      order(100, [{ method: 'CASH', amount: 100 }], '2026-03-10T00:30:00+06:00'),
+      order(200, [{ method: 'WALLET', amount: 150 }, { method: 'BKASH', amount: 50 }], '2026-03-10T11:00:00+06:00'),
+      order(1, [{ method: 'CASH', amount: 1 }], '2026-03-10T23:59:00+06:00'),
+      order(300, [{ method: 'CASH', amount: 300 }], '2026-03-09T23:59:00+06:00'),
       order(999, [{ method: 'CASH', amount: 999 }], '2026-03-10T10:00:00+06:00', 'REFUNDED'),
     ],
-    VendorLedger: [{ companyNet: 10.1 }, { companyNet: 20.2 }, { companyNet: -5.05 }],
+    VendorLedger: [{ companyNet: 10 }, { companyNet: 20 }, { companyNet: -5 }],
     VendorStatement: [
-      { status: 'Approved', netPayable: 500.55 }, { status: 'Approved', netPayable: 100.1 },
+      { status: 'Approved', netPayable: 500 }, { status: 'Approved', netPayable: 100 },
       { status: 'Paid', netPayable: 9999 }, { status: 'Draft', netPayable: 8888 },
     ],
     Expense: [
-      { amount: 40.1, expenseDate: at('2026-03-01T00:30:00+06:00') },
-      { amount: 60.2, expenseDate: at('2026-03-09T10:00:00+06:00') },
+      { amount: 40, expenseDate: at('2026-03-01T00:30:00+06:00') },
+      { amount: 60, expenseDate: at('2026-03-09T10:00:00+06:00') },
       { amount: 7777, expenseDate: at('2026-02-28T23:00:00+06:00') },
       { amount: 8888, expenseDate: at('2026-04-01T00:30:00+06:00') },
     ],
@@ -92,19 +92,19 @@ describe('dashboard API', () => {
     const method = (m) => sum(todayPayments.filter((p) => p.method === m), (p) => p.amount);
 
     expect(d.totalSales).toBe(sum(paid, (o) => o.grandTotal));
-    expect(d.totalSales).toBe(600.7);
+    expect(d.totalSales).toBe(601);
     expect(d.marginIncome).toBe(sum(global.__db.VendorLedger, (l) => l.companyNet));
-    expect(d.marginIncome).toBe(25.25);
+    expect(d.marginIncome).toBe(25);
     expect(d.todaySales).toBe(sum(today, (o) => o.grandTotal));
-    expect(d.todaySales).toBe(300.4);
+    expect(d.todaySales).toBe(301);
     expect(d.todayBillCount).toBe(3);
     expect(d.todayByPaymentMethod).toEqual({ BKASH: method('BKASH'), CASH: method('CASH'), WALLET: method('WALLET') });
-    expect(d.todayByPaymentMethod).toEqual({ BKASH: 50.05, CASH: 100.2, WALLET: 150.15 });
-    expect(d.walletBillTotal).toBe(150.15);
+    expect(d.todayByPaymentMethod).toEqual({ BKASH: 50, CASH: 101, WALLET: 150 });
+    expect(d.walletBillTotal).toBe(150);
     expect(d.vendorPayablesDue).toBe(sum(global.__db.VendorStatement.filter((s) => s.status === 'Approved'), (s) => s.netPayable));
-    expect(d.vendorPayablesDue).toBe(600.65);
+    expect(d.vendorPayablesDue).toBe(600);
     expect(d.monthExpenses).toBe(sum(global.__db.Expense.slice(0, 2), (e) => e.amount));
-    expect(d.monthExpenses).toBe(100.3);
+    expect(d.monthExpenses).toBe(100);
   });
 
   it('lists low stock from movement totals and the latest 10 audit entries', async () => {
@@ -142,7 +142,7 @@ describe('dashboard API', () => {
     it('returns the dashboard and validates the threshold', async () => {
       const res = await request(app).get('/api/dashboard').set(auth());
       expect(res.status).toBe(200);
-      expect(res.body.dashboard.totalSales).toBe(600.7);
+      expect(res.body.dashboard.totalSales).toBe(601);
       expect((await request(app).get('/api/dashboard?lowStockThreshold=-1').set(auth())).status).toBe(400);
     });
   });

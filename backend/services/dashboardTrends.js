@@ -1,11 +1,12 @@
+const { roundHalfUp } = require('../utils/money');
 const DHAKA_OFFSET_MS = 6 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DAILY_POINTS = 14;
 const WEEKLY_POINTS = 8;
 const MONTHLY_POINTS = 6;
 
-const cents = (value) => Math.round((Number(value) + Number.EPSILON) * 100);
-const money = (totalCents) => totalCents / 100;
+const cents = (value) => roundHalfUp(value || 0);
+const money = (value) => value;
 
 const soldTime = (order) => new Date(order.soldAt || order.createdAt).getTime();
 const dhakaDayIndex = (time) => Math.floor((time + DHAKA_OFFSET_MS) / DAY_MS);

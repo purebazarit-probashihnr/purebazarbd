@@ -1,7 +1,6 @@
-const roundMoney = (amount) => Math.round((amount + Number.EPSILON) * 100) / 100;
-const toCents = (amount) => Math.round(roundMoney(amount) * 100);
-const fromCents = (amount) => amount / 100;
+const { roundHalfUp } = require('../utils/money');
 
+// All money below is whole taka (integers), rounded half up per line and per discount, so lines add up to the total.
 function requireNumber(value, name, { min = 0, max = Infinity } = {}) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
     throw new TypeError(`${name} must be a number from ${min} to ${max}`);
@@ -9,7 +8,7 @@ function requireNumber(value, name, { min = 0, max = Infinity } = {}) {
   return value;
 }
 
-function discountCents(discount, baseCents, name) {
+function discountAmount(discount, base, name) {
   if (discount == null) return 0;
   if (!discount || !['PERCENT', 'FIXED'].includes(discount.type)) {
     throw new TypeError(`${name} type must be PERCENT or FIXED`);
@@ -24,19 +23,19 @@ function discountCents(discount, baseCents, name) {
     throw new TypeError(`${name} reason cannot refer to a shareholder discount; it is applied automatically`);
   }
   const amount = discount.type === 'PERCENT'
-    ? Math.round(baseCents * value / 100)
-    : toCents(value);
-  return Math.min(baseCents, amount);
+    ? roundHalfUp(base * value / 100)
+    : roundHalfUp(value);
+  return Math.min(base, amount);
 }
 
-function allocateCents(amountCents, weights) {
+function allocate(amount, weights) {
   const weightTotal = weights.reduce((sum, value) => sum + value, 0);
-  if (!amountCents || !weightTotal) return weights.map(() => 0);
-  let remaining = amountCents;
+  if (!amount || !weightTotal) return weights.map(() => 0);
+  let remaining = amount;
   return weights.map((weight, index) => {
     const allocation = index === weights.length - 1
       ? remaining
-      : Math.min(remaining, Math.round(amountCents * weight / weightTotal));
+      : Math.min(remaining, roundHalfUp(amount * weight / weightTotal));
     remaining -= allocation;
     return allocation;
   });
@@ -61,11 +60,12 @@ function calculateBill({ items, paymentMethod, shareholder, billDiscount, settin
     if (!item || !['COMPANY', 'VENDOR'].includes(item.ownerType)) {
       throw new TypeError(`items[${index}].ownerType must be COMPANY or VENDOR`);
     }
-    const quantity = requireNumber(item.quantity, `items[${index}].quantity`, { min: Number.EPSILON });
+    const quantity = requireNumber(item.quantity, `items[${index}].quantity`, { min: 1 });
+    if (!Number.isInteger(quantity)) throw new TypeError(`items[${index}].quantity must be a whole number`);
     const mrp = requireNumber(item.mrp, `items[${index}].mrp`);
     const vendorPrice = requireNumber(item.vendorPrice, `items[${index}].vendorPrice`);
-    const subtotalCents = toCents(mrp * quantity);
-    const itemDiscountCents = discountCents(item.discount, subtotalCents, `items[${index}].discount`);
+    const subtotal = roundHalfUp(mrp * quantity);
+    const itemDiscount = discountAmount(item.discount, subtotal, `items[${index}].discount`);
     const categoryVatRate = item.categoryVatRate ?? item.category?.vatRate;
     const vatRate = item.vatRate ?? categoryVatRate ?? defaultVatRate;
     requireNumber(vatRate, `items[${index}].vatRate`, { max: 100 });
@@ -74,73 +74,62 @@ function calculateBill({ items, paymentMethod, shareholder, billDiscount, settin
       vendorId: item.vendorId,
       ownerType: item.ownerType,
       quantity,
-      subtotalCents,
-      itemDiscountCents,
-      remainingCents: subtotalCents - itemDiscountCents,
-      vendorPayableCents: item.ownerType === 'VENDOR' ? toCents(vendorPrice * quantity) : 0,
+      subtotal,
+      itemDiscount,
+      remaining: subtotal - itemDiscount,
+      vendorPayable: item.ownerType === 'VENDOR' ? roundHalfUp(vendorPrice * quantity) : 0,
       vatRate: vatEnabled && item.vatApplicable === true ? vatRate : 0,
     };
   });
 
-  const subtotalCents = lines.reduce((sum, line) => sum + line.subtotalCents, 0);
-  const afterItemDiscountCents = lines.reduce((sum, line) => sum + line.remainingCents, 0);
-  const billDiscountCents = discountCents(billDiscount, afterItemDiscountCents, 'billDiscount');
-  const billAllocations = allocateCents(billDiscountCents, lines.map((line) => line.remainingCents));
+  const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0);
+  const afterItemDiscount = lines.reduce((sum, line) => sum + line.remaining, 0);
+  const billDiscountTotal = discountAmount(billDiscount, afterItemDiscount, 'billDiscount');
+  const billAllocations = allocate(billDiscountTotal, lines.map((line) => line.remaining));
   lines.forEach((line, index) => {
-    line.billDiscountCents = billAllocations[index];
-    line.afterOtherDiscountCents = line.remainingCents - line.billDiscountCents;
+    line.billDiscount = billAllocations[index];
+    line.afterOtherDiscount = line.remaining - line.billDiscount;
   });
 
-  const otherDiscountCents = lines.reduce(
-    (sum, line) => sum + line.itemDiscountCents + line.billDiscountCents,
-    0,
-  );
+  const otherDiscount = lines.reduce((sum, line) => sum + line.itemDiscount + line.billDiscount, 0);
   const shareholderEligible = paymentMethod === 'WALLET' && shareholder?.verified === true;
-  const afterOtherDiscountCents = lines.reduce((sum, line) => sum + line.afterOtherDiscountCents, 0);
-  const shareholderDiscountCents = shareholderEligible
-    ? Math.round(afterOtherDiscountCents * shareholderPercent / 100)
+  const afterOtherDiscount = lines.reduce((sum, line) => sum + line.afterOtherDiscount, 0);
+  const shareholderDiscount = shareholderEligible
+    ? roundHalfUp(afterOtherDiscount * shareholderPercent / 100)
     : 0;
-  const shareholderAllocations = allocateCents(
-    shareholderDiscountCents,
-    lines.map((line) => line.afterOtherDiscountCents),
-  );
+  const shareholderAllocations = allocate(shareholderDiscount, lines.map((line) => line.afterOtherDiscount));
 
-  let vatTotalCents = 0;
+  let vatTotal = 0;
   const ledgerLines = lines.map((line, index) => {
-    const vatBaseCents = vatOrder === 'VAT_THEN_DISCOUNT'
-      ? line.remainingCents
-      : line.afterOtherDiscountCents - shareholderAllocations[index];
-    const vatCents = Math.round(vatBaseCents * line.vatRate / 100);
-    vatTotalCents += vatCents;
-    const lineDiscountCents = line.itemDiscountCents
-      + line.billDiscountCents
-      + shareholderAllocations[index];
-    const companyNetCents = (line.subtotalCents - line.vendorPayableCents) - lineDiscountCents;
+    const vatBase = vatOrder === 'VAT_THEN_DISCOUNT'
+      ? line.remaining
+      : line.afterOtherDiscount - shareholderAllocations[index];
+    const vat = roundHalfUp(vatBase * line.vatRate / 100);
+    vatTotal += vat;
+    const lineDiscount = line.itemDiscount + line.billDiscount + shareholderAllocations[index];
     return {
       productId: line.productId,
       vendorId: line.vendorId,
       ownerType: line.ownerType,
       quantity: line.quantity,
-      subtotal: fromCents(line.subtotalCents),
-      itemDiscountAmount: fromCents(line.itemDiscountCents),
-      billDiscountAmount: fromCents(line.billDiscountCents),
-      shareholderDiscountAmount: fromCents(shareholderAllocations[index]),
-      discountAmount: fromCents(lineDiscountCents),
+      subtotal: line.subtotal,
+      itemDiscountAmount: line.itemDiscount,
+      billDiscountAmount: line.billDiscount,
+      shareholderDiscountAmount: shareholderAllocations[index],
+      discountAmount: lineDiscount,
       vatRate: line.vatRate,
-      vatAmount: fromCents(vatCents),
-      vendorPayable: fromCents(line.vendorPayableCents),
-      companyNet: fromCents(companyNetCents),
+      vatAmount: vat,
+      vendorPayable: line.vendorPayable,
+      companyNet: (line.subtotal - line.vendorPayable) - lineDiscount,
     };
   });
 
-  const grandTotalCents = subtotalCents - otherDiscountCents
-    - shareholderDiscountCents + vatTotalCents;
   return {
-    subtotal: fromCents(subtotalCents),
-    otherDiscountAmount: fromCents(otherDiscountCents),
-    shareholderDiscountAmount: fromCents(shareholderDiscountCents),
-    vatAmount: fromCents(vatTotalCents),
-    grandTotal: fromCents(grandTotalCents),
+    subtotal,
+    otherDiscountAmount: otherDiscount,
+    shareholderDiscountAmount: shareholderDiscount,
+    vatAmount: vatTotal,
+    grandTotal: subtotal - otherDiscount - shareholderDiscount + vatTotal,
     ledgerLines,
   };
 }

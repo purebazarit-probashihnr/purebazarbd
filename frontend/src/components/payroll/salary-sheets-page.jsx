@@ -158,7 +158,7 @@ export default function SalarySheetsPage() {
       key: 'allowances',
       label: 'Allowances',
       render: (value, line) => sheet?.status === 'Draft' && canWrite
-        ? <Input aria-label={`Allowances for ${employeeId(line.employeeId)}`} type="number" min="0" step="0.01" value={lineEdits[employeeId(line.employeeId)]?.allowances ?? value} onChange={(event) => setLineEdits((current) => ({ ...current, [employeeId(line.employeeId)]: { ...current[employeeId(line.employeeId)], allowances: event.target.value } }))} />
+        ? <Input aria-label={`Allowances for ${employeeId(line.employeeId)}`} type="number" min="0" step="1" value={lineEdits[employeeId(line.employeeId)]?.allowances ?? value} onChange={(event) => setLineEdits((current) => ({ ...current, [employeeId(line.employeeId)]: { ...current[employeeId(line.employeeId)], allowances: event.target.value } }))} />
         : formatPayrollMoney(value),
     },
     { key: 'advanceDeduction', label: 'Advance', render: formatPayrollMoney },
@@ -166,7 +166,7 @@ export default function SalarySheetsPage() {
       key: 'otherDeductions',
       label: 'Other deductions',
       render: (value, line) => sheet?.status === 'Draft' && canWrite
-        ? <Input aria-label={`Other deductions for ${employeeId(line.employeeId)}`} type="number" min="0" step="0.01" value={lineEdits[employeeId(line.employeeId)]?.otherDeductions ?? value} onChange={(event) => setLineEdits((current) => ({ ...current, [employeeId(line.employeeId)]: { ...current[employeeId(line.employeeId)], otherDeductions: event.target.value } }))} />
+        ? <Input aria-label={`Other deductions for ${employeeId(line.employeeId)}`} type="number" min="0" step="1" value={lineEdits[employeeId(line.employeeId)]?.otherDeductions ?? value} onChange={(event) => setLineEdits((current) => ({ ...current, [employeeId(line.employeeId)]: { ...current[employeeId(line.employeeId)], otherDeductions: event.target.value } }))} />
         : formatPayrollMoney(value),
     },
     { key: 'netAmount', label: 'Net pay', render: formatPayrollMoney },

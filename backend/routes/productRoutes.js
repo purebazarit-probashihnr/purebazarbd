@@ -27,8 +27,13 @@ const optionalPrice = (field) => body(field).optional().isFloat({ min: 0 }).toFl
   .withMessage(`${field} must be zero or greater`);
 
 const pieceRules = [
-  body('unitsPerPackage').optional({ nullable: true }).isFloat({ min: 1 }).toFloat()
-    .withMessage('unitsPerPackage must be 1 or more'),
+  body('unitsPerPackage').optional({ nullable: true }).isInt({ min: 1 }).toInt()
+    .withMessage('unitsPerPackage must be a whole number of 1 or more'),
+  body('sellingUnits').optional().isArray({ max: 10 }).withMessage('sellingUnits must be a list'),
+  body('sellingUnits.*.name').isString().trim().isLength({ min: 1, max: 40 })
+    .withMessage('Each extra unit needs a name'),
+  body('sellingUnits.*.baseQuantity').isInt({ min: 1 }).toInt()
+    .withMessage('Each extra unit needs a whole base quantity of 1 or more'),
   body('subUnitPriceOverride').optional({ nullable: true }).isFloat({ min: 0 }).toFloat()
     .withMessage('subUnitPriceOverride must be zero or greater'),
 ];

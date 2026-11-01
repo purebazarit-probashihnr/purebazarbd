@@ -1,14 +1,8 @@
+const { formatMoney } = require('../../services/money-format.cjs');
+
 function localDateInput(value = new Date()) {
   const offset = value.getTimezoneOffset() * 60_000;
   return new Date(value.getTime() - offset).toISOString().slice(0, 10);
-}
-
-function formatMoney(amount) {
-  return new Intl.NumberFormat('en-BD', {
-    style: 'currency',
-    currency: 'BDT',
-    minimumFractionDigits: 2,
-  }).format(Number(amount) || 0);
 }
 
 function formatDate(value) {

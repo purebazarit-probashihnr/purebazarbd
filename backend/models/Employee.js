@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { roundHalfUp } = require('../utils/money');
 
 const employeeSchema = new mongoose.Schema({
   employeeCode: { type: String, required: true, trim: true, unique: true },
@@ -7,7 +8,7 @@ const employeeSchema = new mongoose.Schema({
   email: { type: String, lowercase: true, trim: true },
   designation: { type: String, trim: true },
   department: { type: String, trim: true },
-  baseSalary: { type: Number, required: true, min: 0, set: (value) => Number(Number(value).toFixed(2)) },
+  baseSalary: { type: Number, required: true, min: 0, set: roundHalfUp },
   hireDate: { type: Date, default: Date.now },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE', required: true },

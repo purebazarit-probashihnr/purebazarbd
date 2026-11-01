@@ -17,8 +17,8 @@ const write = [authMiddleware, authorizeMiddleware({ permissions: ['stock:write'
 const id = param('id').isMongoId().withMessage('A valid goods receive ID is required');
 const lines = body('lines').isArray({ min: 1 }).withMessage('At least one product line is required');
 const lineProduct = body('lines.*.productId').isMongoId().withMessage('A valid product ID is required');
-const lineQuantity = (field, min) => body(`lines.*.${field}`).isFloat({ min }).toFloat()
-  .withMessage(`${field} must be ${min === 0 ? 'zero or greater' : 'greater than zero'}`);
+const lineQuantity = (field, min) => body(`lines.*.${field}`).isInt({ min }).toInt()
+  .withMessage(`${field} must be a whole number ${min === 0 ? 'zero or greater' : 'greater than zero'}`);
 const lineUnit = body('lines.*.unit').optional().isIn(['PACKAGE', 'BASE']).withMessage('unit must be PACKAGE or BASE');
 const lineQuantities = body('lines').custom((items) => (
   Array.isArray(items) && items.every((item) => (
@@ -51,15 +51,15 @@ const adjustmentReasonNote = body('reasonNote')
   .if(body('reason').equals('Other'))
   .isString().trim().isLength({ min: 1, max: 500 })
   .withMessage('An Other reason note of 1 to 500 characters is required');
-const adjustmentQuantities = body('lines.*.quantity').isFloat({ min: 0.000001 }).toFloat()
-  .withMessage('Adjustment quantities must be greater than zero');
+const adjustmentQuantities = body('lines.*.quantity').isInt({ min: 1 }).toInt()
+  .withMessage('Adjustment quantities must be whole numbers greater than zero');
 const nonZeroAdjustmentLines = body('lines').custom((items) => (
   Array.isArray(items) && items.some((item) => Number(item.quantity) !== 0)
 )).withMessage('At least one non-zero adjustment line is required');
 const countLines = body('lines').isArray({ min: 1 }).withMessage('At least one stock count line is required');
 const countProducts = body('lines.*.productId').isMongoId().withMessage('A valid product ID is required');
-const countQuantities = body('lines.*.countedQuantity').isFloat({ min: 0 }).toFloat()
-  .withMessage('Counted quantity must be zero or greater');
+const countQuantities = body('lines.*.countedQuantity').isInt({ min: 0 }).toInt()
+  .withMessage('Counted quantity must be a whole number, zero or greater');
 const stockLocation = body('warehouseId').isMongoId().withMessage('A valid warehouse or outlet ID is required');
 const stockReason = body('reason').isString().trim().isLength({ min: 1, max: 500 })
   .withMessage('A reason of 1 to 500 characters is required');
@@ -129,16 +129,16 @@ router.post('/stock-transfers/:id/dispatch', [
   transferId,
   transferLines,
   transferProduct,
-  body('lines.*.dispatchedQuantity').isFloat({ min: 0 }).toFloat()
-    .withMessage('Dispatched quantity must be zero or greater'),
+  body('lines.*.dispatchedQuantity').isInt({ min: 0 }).toInt()
+    .withMessage('Dispatched quantity must be a whole number, zero or greater'),
 ], validateRequest, stockTransferController.dispatchTransfer);
 router.post('/stock-transfers/:id/receive', [
   authMiddleware, authorizeMiddleware({ permissions: ['stock:transfer:receive'] }),
   transferId,
   transferLines,
   transferProduct,
-  body('lines.*.receivedQuantity').isFloat({ min: 0 }).toFloat()
-    .withMessage('Received quantity must be zero or greater'),
+  body('lines.*.receivedQuantity').isInt({ min: 0 }).toInt()
+    .withMessage('Received quantity must be a whole number, zero or greater'),
 ], validateRequest, stockTransferController.receiveTransfer);
 router.get('/stock/products', read, [
   query('ownerType').optional().isIn(['COMPANY', 'VENDOR']).withMessage('Owner type must be COMPANY or VENDOR'),
@@ -163,7 +163,7 @@ router.post('/goods-receives', write, [
   body('warehouseId').isMongoId().withMessage('A valid warehouse ID is required'),
   challan,
   lines, lineProduct, lineUnit,
-  lineQuantity('receivedQuantity', 0.000001),
+  lineQuantity('receivedQuantity', 1),
   lineQuantity('acceptedQuantity', 0),
   lineQuantity('rejectedQuantity', 0),
   lineQuantities,
@@ -178,7 +178,7 @@ router.put('/goods-receives/:id', write, [
   challan,
   body('lines').optional().isArray({ min: 1 }).withMessage('At least one product line is required'),
   lineProduct.optional(), lineUnit,
-  lineQuantity('receivedQuantity', 0.000001).optional(),
+  lineQuantity('receivedQuantity', 1).optional(),
   lineQuantity('acceptedQuantity', 0).optional(),
   lineQuantity('rejectedQuantity', 0).optional(),
   body('lines').optional().custom((items) => items.every((item) => (

@@ -1,3 +1,4 @@
+const { roundHalfUp } = require('../utils/money');
 const {
   AuditLog, Expense, Order, Product, StockMovement, VendorLedger, VendorStatement,
 } = require('../models');
@@ -9,8 +10,8 @@ const DEFAULT_LOW_STOCK_THRESHOLD = 10;
 const RECENT_ACTIVITY_LIMIT = 10;
 const LOW_STOCK_LIMIT = 50;
 
-const cents = (value) => Math.round((Number(value) + Number.EPSILON) * 100);
-const money = (totalCents) => totalCents / 100;
+const cents = (value) => roundHalfUp(value || 0);
+const money = (value) => value;
 const sumCents = (items, pick) => items.reduce((sum, item) => sum + cents(pick(item) || 0), 0);
 
 // Asia/Dhaka calendar day and month boundaries, expressed as UTC instants.
@@ -42,12 +43,12 @@ async function lowStockAlerts(threshold) {
   });
   const names = new Map(products.map((product) => [String(product._id), product]));
   return [...quantities.entries()]
-    .filter(([productId, total]) => names.has(productId) && total / 100 <= threshold)
+    .filter(([productId, total]) => names.has(productId) && total <= threshold)
     .map(([productId, total]) => ({
       productId,
       productName: names.get(productId).name,
       barcode: names.get(productId).barcode,
-      quantity: total / 100,
+      quantity: total,
     }))
     .sort((a, b) => a.quantity - b.quantity || a.productName.localeCompare(b.productName))
     .slice(0, LOW_STOCK_LIMIT);

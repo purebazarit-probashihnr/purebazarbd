@@ -15,11 +15,12 @@ import {
 import HoldSaleModal from './hold-sale-modal';
 import billingUtils from '@/services/pos-billing-utils.cjs';
 import {
-  STOCK_LIMIT_MESSAGE, allowsFraction, availableStock, canSellPieces, cartShape, clampQuantity, defaultUnit, hasStockProblem,
+  STOCK_LIMIT_MESSAGE, availableStock, canSellPieces, cartShape, clampQuantity, defaultSelection, hasStockProblem, unitOptions,
 } from '@/services/pos-cart-utils.cjs';
 import InvoiceModal from './invoice-modal';
 import ErrorToast from './error-toast';
 import useToastMessages from '@/hooks/use-toast-messages';
+import { roundHalfUp } from '@/services/money-format.cjs';
 import { T } from '@/i18n/language-provider';
 
 const { createPreviewPayload, paymentTotalMatches } = billingUtils;
@@ -99,7 +100,7 @@ export default function PosBillingPage() {
 
   useEffect(() => {
     if (singleMethod && singleMethod !== 'WALLET' && bill) {
-      const total = bill.grandTotal.toFixed(2);
+      const total = String(roundHalfUp(bill.grandTotal));
       setAmounts((current) => (current[singleMethod] === total
         ? current
         : { ...current, [singleMethod]: total }));
@@ -110,7 +111,7 @@ export default function PosBillingPage() {
     setSuccessMessage('');
     const stock = Number(product.stock) || 0;
     const existing = itemsRef.current.find((item) => item.productId === String(product.productId));
-    const limit = existing ? availableStock({ ...existing, stock }) : availableStock({ ...cartShape(product, stock), unit: defaultUnit(cartShape(product, stock)) });
+    const limit = existing ? availableStock({ ...existing, stock }) : availableStock({ ...cartShape(product, stock), ...defaultSelection(cartShape(product, stock)) });
     if (limit <= 0 || (existing && Number(existing.quantity) >= limit)) {
       showToast(STOCK_LIMIT_MESSAGE);
       if (limit <= 0 && !existing) return;
@@ -125,11 +126,10 @@ export default function PosBillingPage() {
       }
       if (limit <= 0) return current;
       const shape = cartShape(product, stock);
-      const unit = defaultUnit(shape);
       return [...current, {
         ...shape,
-        unit,
-        quantity: unit === 'PIECE' && shape.baseUnitMeasured ? Math.min(1, limit) : 1,
+        ...defaultSelection(shape),
+        quantity: 1,
         discount: null,
       }];
     });
@@ -138,15 +138,18 @@ export default function PosBillingPage() {
   function updateQuantity(productId, value) {
     const target = items.find((item) => item.productId === productId);
     if (!target) return;
-    const { quantity, limited } = clampQuantity(value, availableStock(target), allowsFraction(target));
+    const { quantity, limited } = clampQuantity(value, availableStock(target));
     if (limited) showToast(STOCK_LIMIT_MESSAGE);
     setItems((current) => current.map((item) => item.productId === productId ? { ...item, quantity: Math.max(quantity, 1) } : item));
   }
 
-  function updateUnit(productId, unit) {
-    setItems((current) => current.map((item) => item.productId === productId && canSellPieces(item)
-      ? { ...item, unit, quantity: Math.min(1, Math.max(availableStock({ ...item, unit }), 0)) || 1 }
-      : item));
+  function updateUnit(productId, key) {
+    setItems((current) => current.map((item) => {
+      const option = canSellPieces(item) && unitOptions(item).find((entry) => entry.key === key);
+      if (!option) return item;
+      const next = { ...item, unit: option.unit, unitName: option.unitName };
+      return { ...next, quantity: Math.min(1, Math.max(availableStock(next), 0)) || 1 };
+    }).map((item) => item));
   }
 
   function updateItemDiscount(productId, patch) {
@@ -197,7 +200,7 @@ export default function PosBillingPage() {
     } catch (error) {
       if (error.response?.status === 409 && error.response.data?.sufficient === false) {
         setMethods(['CASH']);
-        setAmounts({ CASH: Number(error.response.data.bill?.grandTotal || 0).toFixed(2) });
+        setAmounts({ CASH: String(roundHalfUp(error.response.data.bill?.grandTotal || 0)) });
       }
       setCheckoutError(posErrorMessage(error));
     } finally {

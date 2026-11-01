@@ -10,11 +10,11 @@ import {
 } from '@/services/stock';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
+import { formatMoney } from '@/services/money-format.cjs';
 
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
 const recordId = (record) => String(record.id || record._id);
 const statusTone = { Approved: 'success', Pending: 'warning', Rejected: 'danger' };
-const money = (value) => new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT' }).format(Number(value) || 0);
 const reasons = ['Damaged', 'Expired', 'Lost or stolen', 'Found extra stock', 'Data entry correction', 'Other'];
 
 export default function StockAdjustmentsPage() {
@@ -276,7 +276,7 @@ export default function StockAdjustmentsPage() {
                 <div><strong className="block text-sm">{productsById.get(line.productId)?.name}</strong><small className="text-slate-500">{productsById.get(line.productId)?.barcode}</small></div>
                 <span className="pb-2 text-sm text-slate-600">Current stock: {line.stockQuantity}</span>
                 <div>
-                  <Input label="Quantity" type="number" min="0.000001" max={mode === 'REMOVE' ? line.stockQuantity : undefined} step="any" value={line.quantity} onChange={(event) => setLines((current) => current.map((entry) => entry.productId === line.productId ? { ...entry, quantity: event.target.value } : entry))} />
+                  <Input label="Quantity" type="number" min="1" max={mode === 'REMOVE' ? line.stockQuantity : undefined} step="1" value={line.quantity} onChange={(event) => setLines((current) => current.map((entry) => entry.productId === line.productId ? { ...entry, quantity: event.target.value } : entry))} />
                   {mode === 'REMOVE' && Number(line.quantity) > Number(line.stockQuantity) && <p className="mt-1 text-xs text-red-700">Cannot remove more than {line.stockQuantity} currently in stock.</p>}
                 </div>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setLines((current) => current.filter((entry) => entry.productId !== line.productId))}>Remove</Button>

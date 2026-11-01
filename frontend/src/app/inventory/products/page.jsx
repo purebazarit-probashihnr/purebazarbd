@@ -8,11 +8,8 @@ import { Badge, Button, Input, Table } from '@/components/ui';
 import ProductFormModal from '@/components/inventory/product-form-modal';
 import { createProduct, getProducts } from '@/services/inventory';
 import { T } from '@/i18n/language-provider';
+import { formatMoney } from '@/services/money-format.cjs';
 
-const money = (value) => new Intl.NumberFormat('en-BD', {
-  style: 'currency',
-  currency: 'BDT',
-}).format(Number(value) || 0);
 
 const columns = [
   { key: 'name', label: 'Product', render: (value, product) => product.displayName || value },
@@ -22,7 +19,7 @@ const columns = [
   { key: 'mrp', label: 'MRP', render: money },
   { key: 'margin', label: 'Margin', render: (value, product) => (
     <div className="flex items-center gap-2">
-      <span>{money(value)}</span>
+      <span>{formatMoney(value)}</span>
       {product.marginWarning && <Badge variant="warning">Low margin</Badge>}
     </div>
   ) },

@@ -26,7 +26,7 @@ function ChangeBadge({ change }) {
   const Icon = change < 0 ? ArrowDownRight : ArrowUpRight;
   return (
     <span className={`dash-kpi-badge ${direction}`}>
-      <Icon size={12} />{change > 0 ? '+' : ''}{change.toFixed(1)}% vs yesterday
+      <Icon size={12} />{change > 0 ? '+' : ''}{Math.round(change)}% vs yesterday
     </span>
   );
 }

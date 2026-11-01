@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
+const { roundHalfUp } = require('../utils/money');
 
-const roundMoney = (value) => Number(Number(value || 0).toFixed(2));
+const roundMoney = (value) => roundHalfUp(value || 0);
 
 const salaryLineSchema = new mongoose.Schema({
   employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },

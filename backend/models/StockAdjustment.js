@@ -5,7 +5,7 @@ const stockAdjustmentLineSchema = new mongoose.Schema({
   quantity: {
     type: Number,
     required: true,
-    validate: { validator: (quantity) => Number.isFinite(quantity) && quantity !== 0, message: 'Adjustment quantity cannot be zero' },
+    validate: { validator: (quantity) => Number.isInteger(quantity) && quantity !== 0, message: 'Adjustment quantity must be a non-zero whole number' },
   },
 });
 

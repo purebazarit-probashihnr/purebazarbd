@@ -53,7 +53,7 @@ function seed() {
     Order: [
       {
         _id: o1, paymentStatus: 'PAID', soldAt: at('2026-03-10T10:00:00+06:00'), subtotal: 250, otherDiscountAmount: 15,
-        shareholderDiscountAmount: 0, vatAmount: 7.5, grandTotal: 242.5,
+        shareholderDiscountAmount: 0, vatAmount: 8, grandTotal: 243,
         lines: [
           { productId: pV, quantity: 2, subtotal: 200, itemDiscountAmount: 10, billDiscountAmount: 0 },
           { productId: pC, quantity: 1, subtotal: 50, itemDiscountAmount: 0, billDiscountAmount: 5 },
@@ -61,7 +61,7 @@ function seed() {
       },
       {
         _id: o2, paymentStatus: 'PAID', soldAt: at('2026-03-11T00:30:00+06:00'), subtotal: 100, otherDiscountAmount: 0,
-        shareholderDiscountAmount: 5, vatAmount: 0.1, grandTotal: 95.1,
+        shareholderDiscountAmount: 5, vatAmount: 0, grandTotal: 95,
         lines: [{ productId: pV, quantity: 1, subtotal: 100, itemDiscountAmount: 0, billDiscountAmount: 0, shareholderDiscountAmount: 5 }],
       },
       {
@@ -83,7 +83,7 @@ function seed() {
     ],
     ExpenseCategory: [{ _id: cat, name: 'Rent' }],
     Expense: [
-      { categoryId: cat, amount: 12.34, expenseDate: at('2026-03-10T09:00:00+06:00') },
+      { categoryId: cat, amount: 12, expenseDate: at('2026-03-10T09:00:00+06:00') },
       { categoryId: cat, amount: 500, expenseDate: at('2026-02-28T09:00:00+06:00') },
     ],
     DiscountLog: [
@@ -109,14 +109,14 @@ describe('reports API', () => {
     const daily = await salesReport({ from: '2026-03-01', to: '2026-03-31' });
     expect(daily.rows.map((r) => r.period)).toEqual(['2026-03-10', '2026-03-11']);
     expect(daily.totals.totalSales).toBe(sum(march, (o) => o.grandTotal));
-    expect(daily.totals.totalSales).toBe(337.6);
-    expect(daily.totals.vat).toBe(7.6);
+    expect(daily.totals.totalSales).toBe(338);
+    expect(daily.totals.vat).toBe(8);
     expect(daily.totals.discounts).toBe(20);
     expect(daily.totals.billCount).toBe(2);
     expect(sum(daily.rows, (r) => r.totalSales)).toBe(daily.totals.totalSales);
 
     const monthly = await salesReport({ groupBy: 'month' });
-    expect(monthly.rows.map((r) => [r.period, r.totalSales])).toEqual([['2026-03', 337.6], ['2026-04', 50]]);
+    expect(monthly.rows.map((r) => [r.period, r.totalSales])).toEqual([['2026-03', 338], ['2026-04', 50]]);
     expect(monthly.totals.totalSales).toBe(sum(paid, (o) => o.grandTotal));
   });
 
@@ -147,9 +147,9 @@ describe('reports API', () => {
     expect(report.marginIncome).toBe(75);
     expect(report.ownStockMargin).toBe(20);
     expect(report.discounts).toBe(20);
-    expect(report.expenses).toBe(12.34);
-    expect(report.netProfit).toBe(62.66);
-    expect(report.expensesByCategory).toEqual([{ categoryId: String(cat), category: 'Rent', total: 12.34 }]);
+    expect(report.expenses).toBe(12);
+    expect(report.netProfit).toBe(63);
+    expect(report.expensesByCategory).toEqual([{ categoryId: String(cat), category: 'Rent', total: 12 }]);
     // Cross-check against ledger companyNet (already net of vendor-line discounts) plus own-line net.
     const paidLedger = global.__db.VendorLedger.filter((l) => [o1, o2].includes(l.orderId));
     expect(report.netProfit + report.expenses).toBe(sum(paidLedger, (l) => l.companyNet) + (50 - 30 - 5));
@@ -157,7 +157,7 @@ describe('reports API', () => {
 
   it('VAT and discount report matches paid orders', async () => {
     const report = await vatDiscountReport({ from: '2026-03-01', to: '2026-03-31' });
-    expect(report.totals.vat).toBe(7.6);
+    expect(report.totals.vat).toBe(8);
     expect(report.totals.itemDiscount).toBe(10);
     expect(report.totals.billDiscount).toBe(5);
     expect(report.totals.shareholderDiscount).toBe(5);
@@ -203,7 +203,7 @@ describe('reports API', () => {
 
     it('serves json, Excel and PDF with matching totals', async () => {
       const json = await request(app).get('/api/reports/profit-loss?from=2026-03-01&to=2026-03-31').set(auth());
-      expect(json.body.report.netProfit).toBe(62.66);
+      expect(json.body.report.netProfit).toBe(63);
 
       const xlsx = await request(app).get('/api/reports/vendor-profitability?format=xlsx&from=2026-03-01&to=2026-03-31')
         .set(auth()).buffer(true).parse(binary);
@@ -225,7 +225,7 @@ describe('reports API', () => {
         .set(auth()).buffer(true).parse(binary);
       const salesWorkbook = new ExcelJS.Workbook();
       await salesWorkbook.xlsx.load(sales.body);
-      expect(salesWorkbook.worksheets[0].getRow(4).getCell(6).value).toBe(337.6);
+      expect(salesWorkbook.worksheets[0].getRow(4).getCell(6).value).toBe(338);
 
       const stock = await request(app).get('/api/reports/stock?format=pdf&from=2026-03-10&to=2026-03-31')
         .set(auth()).buffer(true).parse(binary);
@@ -236,7 +236,7 @@ describe('reports API', () => {
         .set(auth()).buffer(true).parse(binary);
       const profitLossWorkbook = new ExcelJS.Workbook();
       await profitLossWorkbook.xlsx.load(profitLossXlsx.body);
-      expect(profitLossWorkbook.worksheets[0].getRow(7).getCell(2).value).toBe(62.66);
+      expect(profitLossWorkbook.worksheets[0].getRow(7).getCell(2).value).toBe(63);
 
       const vatDiscountPdf = await request(app).get('/api/reports/vat-discount?format=pdf&from=2026-03-01&to=2026-03-31')
         .set(auth()).buffer(true).parse(binary);

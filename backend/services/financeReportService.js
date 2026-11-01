@@ -1,6 +1,7 @@
 const {
   DiscountLog, Expense, ExpenseCategory, Order, Product, Vendor, VendorLedger,
 } = require('../models');
+const { roundHalfUp } = require('../utils/money');
 const {
   cents, money, sumCents, milli, qty, periodBounds, inPeriod, bucketKey, soldAt, byKey,
 } = require('./reportUtils');
@@ -39,7 +40,7 @@ async function vendorProfitability({ from, to } = {}) {
       vendorPayable: money(row.payable),
       companyNet: money(row.net),
       // Company net is margin minus discounts, so it is reported as the vendor's profitability.
-      marginPercentOfPayable: row.payable > 0 ? Math.round((row.net / row.payable) * 10000) / 100 : null,
+      marginPercentOfPayable: row.payable > 0 ? Math.round((row.net / row.payable) * 100) : null,
     };
   }).sort((a, b) => b.companyNet - a.companyNet || a.vendorName.localeCompare(b.vendorName));
   const totals = {
@@ -81,7 +82,7 @@ async function profitLoss({ from, to } = {}) {
     if (share !== undefined) {
       marginIncome += cents(line.subtotal) - share;
     } else {
-      ownStockMargin += cents(line.subtotal) - Math.round((cost.get(String(line.productId)) || 0) * packagesSold(line, conversion));
+      ownStockMargin += cents(line.subtotal) - roundHalfUp((cost.get(String(line.productId)) || 0) * packagesSold(line, conversion));
     }
   }));
 

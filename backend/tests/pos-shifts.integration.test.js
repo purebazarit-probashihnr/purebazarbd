@@ -123,7 +123,7 @@ describe('POS cashier shifts API', () => {
     db.orders = [
       {
         cashier: cashierId, outlet: outletId, paymentStatus: 'PAID', createdAt: soldAt,
-        payments: [{ method: 'CASH', amount: 30.25 }, { method: 'CARD', amount: 19.75 }],
+        payments: [{ method: 'CASH', amount: 30 }, { method: 'CARD', amount: 20 }],
       },
       {
         cashier: cashierId, outlet: outletId, paymentStatus: 'PAID', createdAt: soldAt,
@@ -146,17 +146,17 @@ describe('POS cashier shifts API', () => {
     expect(closed.body.shift).toMatchObject({
       status: 'CLOSED',
       openingCash: 100,
-      expectedCash: 140.25,
+      expectedCash: 140,
       actualCash: 138,
-      cashDifference: -2.25,
+      cashDifference: -2,
     });
     expect(closed.body.report).toMatchObject({
-      expectedCash: 140.25,
+      expectedCash: 140,
       actualCash: 138,
-      cashDifference: -2.25,
+      cashDifference: -2,
       paymentSummary: expect.arrayContaining([
-        { method: 'Cash', expectedAmount: 140.25, actualAmount: 138 },
-        { method: 'Card', expectedAmount: 19.75, actualAmount: 19.75 },
+        { method: 'Cash', expectedAmount: 140, actualAmount: 138 },
+        { method: 'Card', expectedAmount: 20, actualAmount: 20 },
         { method: 'bKash', expectedAmount: 20, actualAmount: 20 },
       ]),
     });

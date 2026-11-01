@@ -2,10 +2,11 @@ const {
   AuditLog, Brand, Category, PriceHistory, Product, Settings, Unit, Vendor,
 } = require('../models');
 const { unitLabelMap, displayFields } = require('../utils/productDisplay');
+const { fixedPackageSize } = require('../utils/units');
 
 const editableFields = [
   'name', 'categoryId', 'brandId', 'unitId', 'baseUnitId', 'unitValue', 'ownerType', 'vendorId',
-  'vendorPrice', 'mrp', 'vatApplicable', 'vatRate', 'unitsPerPackage', 'subUnitPriceOverride',
+  'vendorPrice', 'mrp', 'vatApplicable', 'vatRate', 'unitsPerPackage', 'subUnitPriceOverride', 'sellingUnits',
 ];
 
 function statusError(message, status) {
@@ -35,7 +36,7 @@ function productSnapshot(product) {
   return Object.fromEntries([
     'name', 'categoryId', 'brandId', 'unitId', 'baseUnitId', 'unitValue', 'ownerType', 'vendorId',
     'vendorPrice', 'mrp', 'margin', 'vatApplicable', 'vatRate', 'barcode',
-    'unitsPerPackage', 'subUnitPriceOverride', 'subUnitPrice',
+    'unitsPerPackage', 'subUnitPriceOverride', 'subUnitPrice', 'sellingUnits',
   ].filter((field) => data[field] !== undefined)
     .map((field) => [field, data[field]?.toString && field.endsWith('Id') ? data[field].toString() : data[field]]));
 }
@@ -76,6 +77,16 @@ async function validateReferences(data) {
   } else if (data.vendorId) {
     throw statusError('Company-owned products cannot have a vendor', 400);
   }
+}
+
+// Dozen is always 12 pieces: the number is filled in here and never asked for.
+async function applyFixedPackageSize(input, current = {}) {
+  const unitId = input.unitId || current.unitId;
+  const unit = unitId ? await Unit.findById(unitId).select('name abbreviation').lean() : null;
+  const fixed = unit && fixedPackageSize(unit.name, unit.abbreviation);
+  if (!fixed) return;
+  input.unitsPerPackage = fixed;
+  input.baseUnitId = undefined;
 }
 
 function pickInput(body) {
@@ -119,6 +130,7 @@ async function createProduct(req, res, next) {
   try {
     const input = pickInput(req.body);
     await validateReferences(input);
+    await applyFixedPackageSize(input);
     const product = await Product.create(input);
     const after = productSnapshot(product);
     await AuditLog.create({
@@ -151,6 +163,7 @@ async function updateProduct(req, res, next) {
     ));
     const nextValues = { ...productData(product), ...input };
     await validateReferences(nextValues);
+    await applyFixedPackageSize(input, product);
     product.set(input);
     await product.save();
 

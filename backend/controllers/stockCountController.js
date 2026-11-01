@@ -91,7 +91,7 @@ async function postCount(req, res, next) {
       const lines = count.lines
         .map((line) => ({
           productId: line.productId,
-          quantity: Math.round((line.countedQuantity - line.expectedQuantity + Number.EPSILON) * 1000000) / 1000000,
+          quantity: Math.round(line.countedQuantity - line.expectedQuantity),
         }))
         .filter((line) => line.quantity !== 0);
       if (!lines.length) {

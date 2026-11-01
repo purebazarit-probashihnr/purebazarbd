@@ -1,5 +1,5 @@
 const {
-  allowsFraction, availableStock, clampQuantity, defaultUnit, hasStockProblem, lineTotal, stockLabel, unitPrice,
+  availableStock, clampQuantity, defaultSelection, hasStockProblem, lineTotal, stockLabel, unitPrice,
 } = require('../../frontend/src/services/pos-cart-utils.cjs');
 const { getCode39Runs } = require('../../frontend/src/services/code39.cjs');
 
@@ -46,29 +46,27 @@ describe('POS cart quantity rules', () => {
     expect(lineTotal({ ...toffen, unit: 'PACKAGE', quantity: 1 })).toBe(2100);
   });
 
-  it('shows stock as packages with the base unit total and defaults to pieces when no whole package is left', () => {
+  it('shows stock as whole packages plus loose pieces and defaults to pieces when no whole package is left', () => {
     const box = {
-      stock: 90, unitsPerPackage: 6, packageUnitName: 'Box', baseUnitName: 'pcs', subUnitPrice: 5, mrp: 30,
+      stock: 95, unitsPerPackage: 6, packageUnitName: 'Box', baseUnitName: 'pcs', subUnitPrice: 5, mrp: 30,
     };
-    expect(stockLabel(box)).toBe('15 Box (90 pcs)');
-    expect(defaultUnit(box)).toBe('PACKAGE');
-    expect(defaultUnit({ ...box, stock: 4 })).toBe('PIECE');
+    expect(stockLabel(box)).toBe('15 Box 5 pcs (95 pcs)');
+    expect(defaultSelection(box).unit).toBe('PACKAGE');
+    expect(defaultSelection({ ...box, stock: 4 }).unit).toBe('PIECE');
   });
 
-  it('allows fractional quantities only for measured base units like kg', () => {
+  it('keeps weight quantities whole by selling kg products in grams', () => {
     const rice = {
-      stock: 60, unitsPerPackage: 25, subUnitPrice: 100, mrp: 2500, unit: 'PIECE', baseUnitMeasured: true,
+      stock: 60000, unitsPerPackage: 25000, baseKind: 'WEIGHT', subUnitPrice: 0.1, mrp: 2500, unit: 'PIECE',
     };
-    expect(allowsFraction(rice)).toBe(true);
-    expect(availableStock(rice)).toBe(60);
-    expect(clampQuantity(2.5, availableStock(rice), true)).toEqual({ quantity: 2.5, limited: false });
-    expect(allowsFraction({ ...rice, baseUnitMeasured: false })).toBe(false);
+    expect(availableStock(rice)).toBe(60000);
+    expect(clampQuantity(2.5, availableStock(rice))).toEqual({ quantity: 2, limited: false });
     expect(availableStock({ ...rice, unit: 'PACKAGE' })).toBe(2);
   });
 
   it('prices a package at the package MRP and a base unit at the derived price', () => {
     const product = { mrp: 1557, unitsPerPackage: 12, subUnitPrice: 129.75 };
     expect(unitPrice({ ...product, unit: 'PACKAGE' })).toBe(1557);
-    expect(lineTotal({ ...product, unit: 'PIECE', quantity: 2 })).toBe(259.5);
+    expect(lineTotal({ ...product, unit: 'PIECE', quantity: 2 })).toBe(260);
   });
 });

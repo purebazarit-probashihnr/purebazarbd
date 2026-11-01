@@ -1,10 +1,6 @@
-export function formatPayrollMoney(value) {
-  return new Intl.NumberFormat('en-BD', {
-    style: 'currency',
-    currency: 'BDT',
-    minimumFractionDigits: 2,
-  }).format(Number(value) || 0);
-}
+import { formatMoney } from '../../services/money-format.cjs';
+
+export const formatPayrollMoney = (value) => formatMoney(value);
 
 export function formatPayrollDate(value) {
   const date = new Date(value);

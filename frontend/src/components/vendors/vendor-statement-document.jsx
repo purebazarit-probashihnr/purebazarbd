@@ -8,13 +8,9 @@ import { ArrowLeft, Printer } from 'lucide-react';
 import { Badge, Button, Card } from '@/components/ui';
 import { getVendorStatements, getVendors } from '@/services/vendor';
 import { T } from '@/i18n/language-provider';
+import { formatMoney } from '@/services/money-format.cjs';
 
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
-const money = (amount) => new Intl.NumberFormat('en-BD', {
-  style: 'currency',
-  currency: 'BDT',
-  minimumFractionDigits: 2,
-}).format(Number(amount) || 0);
 const date = (value) => {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime())
@@ -98,15 +94,15 @@ export default function VendorStatementDocument({ receipt = false }) {
                 <tr><td><T>{"Sales"}</T></td><td className="text-right">{statement.sales}</td></tr>
                 <tr><td><T>{"Returns"}</T></td><td className="text-right">{statement.returns}</td></tr>
                 <tr><td><T>{"Closing stock"}</T></td><td className="text-right">{statement.closingStock}</td></tr>
-                <tr><td><T>{"Sales value at vendor price"}</T></td><td className="text-right">{money(statement.salesValueAtVendorPrice)}</td></tr>
-                <tr><td><strong><T>{"Net payable"}</T></strong></td><td className="text-right"><strong>{money(statement.netPayable)}</strong></td></tr>
+                <tr><td><T>{"Sales value at vendor price"}</T></td><td className="text-right">{formatMoney(statement.salesValueAtVendorPrice)}</td></tr>
+                <tr><td><strong><T>{"Net payable"}</T></strong></td><td className="text-right"><strong>{formatMoney(statement.netPayable)}</strong></td></tr>
               </tbody>
             </table>
           </div>
         ) : (
           <div className="rounded border border-slate-200 p-5">
             <p className="text-sm text-slate-500"><T>{"Amount received"}</T></p>
-            <p className="mt-2 text-3xl font-semibold text-slate-900">{money(statement.netPayable)}</p>
+            <p className="mt-2 text-3xl font-semibold text-slate-900">{formatMoney(statement.netPayable)}</p>
             <p className="mt-3 text-sm text-slate-600">Payment recorded against statement {statement.statementNumber}.</p>
           </div>
         )}

@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { basePieceCost, defaultPiecesPerPackage, totalPieces } from '@/services/unit-pieces.cjs';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
+import { formatMoney, roundHalfUp } from '@/services/money-format.cjs';
+import { baseUnitName as canonicalBaseName, classifyUnit, fixedPackageSize, toBaseUnits } from '@/services/stock-units.cjs';
 import { Button, Input, Modal, Select } from '@/components/ui';
 import {
   createBrand, createCategory, createUnit, getBrands, getCategories, getUnits,
@@ -28,16 +30,12 @@ const emptyForm = {
   vatRate: '',
   piecesPerPackage: '',
   subUnitPriceOverride: '',
+  sellingUnits: [],
 };
 
-const money = (value) => new Intl.NumberFormat('en-BD', {
-  style: 'currency',
-  currency: 'BDT',
-}).format(Number.isFinite(value) ? value : 0);
-
-function roundedMoney(value) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
+const REQUIRES_NUMBER = ['box', 'sack', 'crate', 'tray', 'pack'];
+const money = (value) => formatMoney(Number.isFinite(value) ? value : 0);
+const roundedMoney = (value) => roundHalfUp(value);
 
 export default function ProductFormModal({
   open, onClose, onSubmit, token, permissions, marginWarningPercent,
@@ -66,18 +64,28 @@ export default function ProductFormModal({
   const warningAmount = hasPrices ? roundedMoney(roundedMrp * discountPercent / 100) : 0;
   const marginWarning = margin !== null && margin >= 0 && margin < warningAmount;
   const invalidMrp = hasPrices && mrp < vendorPrice;
-  const unitsPerPackage = Number(totalPieces(form.piecesPerPackage));
+  const packageUnit = units.find((item) => item.id === form.unitId);
+  const baseUnit = units.find((item) => item.id === form.baseUnitId);
+  const fixedSize = packageUnit ? fixedPackageSize(packageUnit.name, packageUnit.abbreviation) : null;
+  const baseNames = baseUnit ? [baseUnit.name, baseUnit.abbreviation] : [];
+  const baseLabel = canonicalBaseName(classifyUnit(...baseNames).kind);
+  const enteredPieces = form.piecesPerPackage === '' ? '' : toBaseUnits(form.piecesPerPackage, ...baseNames);
+  const unitsPerPackage = Number(totalPieces(fixedSize || enteredPieces));
+  const sellingUnits = form.sellingUnits
+    .filter((row) => row.name.trim() && row.baseQuantity !== '')
+    .map((row) => ({ name: row.name.trim(), baseQuantity: Number(row.baseQuantity) }));
+  const invalidExtras = sellingUnits.some((row) => !Number.isInteger(row.baseQuantity) || row.baseQuantity < 1);
   const hasPieces = Number.isInteger(unitsPerPackage) && unitsPerPackage > 1 && hasPrices;
   const trueBaseCost = hasPieces ? basePieceCost(roundedMrp, unitsPerPackage) : null;
-  const autoPiecePrice = hasPieces ? roundedMoney(trueBaseCost) : null;
+  const autoPiecePrice = hasPieces ? trueBaseCost : null;
   // Helper text depends only on MRP, quantity and pieces, so it updates on every keystroke.
-  const helperPieces = Number(totalPieces(form.piecesPerPackage));
+  const helperPieces = unitsPerPackage;
   const helperMrp = form.mrp !== '' && Number.isFinite(mrp) ? roundedMoney(mrp) : null;
   const helperVendorCost = form.vendorPrice !== '' && Number.isInteger(helperPieces) && helperPieces > 1
     ? roundedMoney(basePieceCost(roundedMoney(vendorPrice), helperPieces)) : null;
   const helperCost = helperMrp !== null && Number.isInteger(helperPieces) && helperPieces > 1
     ? roundedMoney(basePieceCost(helperMrp, helperPieces)) : null;
-  const overrideValue = form.subUnitPriceOverride === '' ? null : roundedMoney(Number(form.subUnitPriceOverride));
+  const overrideValue = form.subUnitPriceOverride === '' ? null : Number(form.subUnitPriceOverride);
   const invalidOverride = hasPieces && overrideValue !== null
     && (!Number.isFinite(overrideValue) || overrideValue < trueBaseCost - 1e-9);
 
@@ -135,8 +143,17 @@ export default function ProductFormModal({
       return;
     }
 
+    if (invalidExtras) {
+      setError('Extra selling units need a whole-number base quantity of at least 1.');
+      return;
+    }
+    if (!fixedSize && packageUnit && !form.piecesPerPackage && REQUIRES_NUMBER.includes(String(packageUnit.name).toLowerCase())) {
+      setError(`Enter how many base units one ${packageUnit.name} holds.`);
+      return;
+    }
+
     if (invalidOverride) {
-      setError(`Base unit price cannot be below the margin-safe price of ${money(autoPiecePrice)}.`);
+      setError(`Base unit price cannot be below the margin-safe price of ${money(Math.ceil(autoPiecePrice))}.`);
       return;
     }
 
@@ -151,6 +168,7 @@ export default function ProductFormModal({
       vendorPrice: roundedVendorPrice,
       mrp: roundedMrp,
       ...(hasPieces ? { unitsPerPackage } : {}),
+      ...(sellingUnits.length ? { sellingUnits } : {}),
       ...(hasPieces && overrideValue !== null ? { subUnitPriceOverride: overrideValue } : {}),
       vatApplicable: form.vatApplicable,
       ...(form.vatApplicable && form.vatRate !== '' ? { vatRate: Number(form.vatRate) } : {}),
@@ -190,8 +208,9 @@ export default function ProductFormModal({
       const next = { ...current, [field]: value };
       if (field === 'piecesPerPackage') {
         piecesEdited.current = value !== '';
-      } else if (field === 'unitId' && !piecesEdited.current) {
-        next.piecesPerPackage = defaultPiecesPerPackage(units.find((item) => item.id === next.unitId));
+      } else if (field === 'unitId') {
+        const fixed = defaultPiecesPerPackage(units.find((item) => item.id === next.unitId));
+        if (fixed) next.piecesPerPackage = '';
       }
       return next;
     });
@@ -245,8 +264,8 @@ export default function ProductFormModal({
           {catalogErrors.map((message) => <p key={message} role="alert" className="text-xs text-amber-800">{message}</p>)}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Input label="Vendor price (৳)" name="vendorPrice" type="number" min="0" step="0.01" value={form.vendorPrice} onChange={(event) => update('vendorPrice', event.target.value)} required />
-            <Input label="MRP (৳)" name="mrp" type="number" min="0" step="0.01" value={form.mrp} onChange={(event) => update('mrp', event.target.value)} required />
+            <Input label="Vendor price (৳)" name="vendorPrice" type="number" min="0" step="1" value={form.vendorPrice} onChange={(event) => update('vendorPrice', event.target.value)} required />
+            <Input label="MRP (৳)" name="mrp" type="number" min="0" step="1" value={form.mrp} onChange={(event) => update('mrp', event.target.value)} required />
           </div>
           <div className="rounded border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500"><T>{"Margin"}</T></p>
@@ -258,16 +277,34 @@ export default function ProductFormModal({
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Input label="Conversion (base units per package)" name="piecesPerPackage" type="number" min="1" step="any" value={form.piecesPerPackage} onChange={(event) => update('piecesPerPackage', event.target.value)} />
+            {fixedSize ? (
+              <p className="flex min-h-10 items-center text-sm text-slate-600">1 {packageUnit.name} = {fixedSize} pcs</p>
+            ) : (
+              <Input label={`Base units per package (${baseUnit?.name || baseLabel})`} name="piecesPerPackage" type="number" min="1" step="1" value={form.piecesPerPackage} onChange={(event) => update('piecesPerPackage', event.target.value)} />
+            )}
             <Input label="Retail price per base unit (Optional)" placeholder="Optional retail price per base unit" name="subUnitPriceOverride" type="number" min="0" step="0.01" value={form.subUnitPriceOverride} onChange={(event) => update('subUnitPriceOverride', event.target.value)} disabled={!hasPieces} />
           </div>
           {helperCost !== null && (
             <div role="status" className="space-y-1 text-xs text-slate-600">
-              <p>MRP per base unit: BDT {helperCost.toFixed(2)} (1 package = {helperPieces} base units)</p>
-              {helperVendorCost !== null && <p>Vendor price per base unit: BDT {helperVendorCost.toFixed(2)}</p>}
-              {invalidOverride && <p className="text-red-700">Custom base unit price must be at least {autoPiecePrice.toFixed(2)}.</p>}
+              <p>MRP per base unit: {money(helperCost)} (1 package = {helperPieces} {baseLabel})</p>
+              {helperVendorCost !== null && <p>Vendor price per base unit: {money(helperVendorCost)}</p>}
+              {invalidOverride && <p className="text-red-700">Custom base unit price must be at least {formatMoney(Math.ceil(autoPiecePrice))}.</p>}
             </div>
           )}
+
+          <div className="space-y-2 rounded border border-slate-200 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-slate-700"><T>{"Also sell as"}</T></p>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setForm((current) => ({ ...current, sellingUnits: [...current.sellingUnits, { name: '', baseQuantity: '' }] }))}><Plus size={15} /> <T>{"Add unit"}</T></Button>
+            </div>
+            {form.sellingUnits.map((row, index) => (
+              <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                <Input label="Unit name" value={row.name} maxLength={30} onChange={(event) => setForm((current) => ({ ...current, sellingUnits: current.sellingUnits.map((entry, i) => (i === index ? { ...entry, name: event.target.value } : entry)) }))} />
+                <Input label={`Base quantity (${baseLabel})`} type="number" min="1" step="1" value={row.baseQuantity} onChange={(event) => setForm((current) => ({ ...current, sellingUnits: current.sellingUnits.map((entry, i) => (i === index ? { ...entry, baseQuantity: event.target.value } : entry)) }))} />
+                <Button type="button" variant="secondary" size="sm" aria-label="Remove unit" onClick={() => setForm((current) => ({ ...current, sellingUnits: current.sellingUnits.filter((_, i) => i !== index) }))}><X size={15} /></Button>
+              </div>
+            ))}
+          </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-slate-700">
@@ -279,7 +316,7 @@ export default function ProductFormModal({
 
           <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
             <Button type="button" variant="secondary" onClick={onClose}><T>{"Cancel"}</T></Button>
-            <Button type="submit" disabled={saving || catalogLoading || !hasPrices || invalidMrp || invalidOverride}><T>{saving ? "Saving..." : "Save product"}</T></Button>
+            <Button type="submit" disabled={saving || catalogLoading || !hasPrices || invalidMrp || invalidOverride || invalidExtras}><T>{saving ? "Saving..." : "Save product"}</T></Button>
           </div>
         </form>
       </Modal>

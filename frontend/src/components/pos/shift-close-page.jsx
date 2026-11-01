@@ -9,10 +9,10 @@ import {
 } from '@/services/pos-admin';
 import { paymentMethodLabel } from '@/services/pos-screen-utils.cjs';
 import { T } from '@/i18n/language-provider';
+import { formatMoney } from '@/services/money-format.cjs';
 import useToastMessages from '@/hooks/use-toast-messages';
 
-const currency = new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT' });
-const amount = (value) => (value == null ? '—' : currency.format(Number(value) || 0));
+const amount = (value) => (value == null ? '—' : formatMoney(Number(value) || 0));
 const dateTime = (value) => (value ? new Date(value).toLocaleString() : '—');
 
 function Report({ shift, report }) {
@@ -150,7 +150,7 @@ export default function ShiftClosePage() {
             <Card title="Open shift" description="Enter the cash float counted into the drawer at opening.">
               {canWrite ? (
                 <form className="flex max-w-md flex-wrap items-end gap-3" onSubmit={handleOpen}>
-                  <Input className="min-w-56 flex-1" label="Opening cash (৳)" type="number" min="0" step="0.01" required value={openingCash} onChange={(event) => setOpeningCash(event.target.value)} />
+                  <Input className="min-w-56 flex-1" label="Opening cash (৳)" type="number" min="0" step="1" required value={openingCash} onChange={(event) => setOpeningCash(event.target.value)} />
                   <Button type="submit" disabled={saving}>{saving ? 'Opening…' : 'Open shift'}</Button>
                 </form>
               ) : <p className="m-0 text-sm text-slate-500"><T>{"POS write permission is required to open a shift."}</T></p>}
@@ -160,7 +160,7 @@ export default function ShiftClosePage() {
             <Card title="Close shift" description="Count the cash drawer and compare it with expected cash before closing.">
               {canWrite ? (
                 <form className="flex max-w-md flex-wrap items-end gap-3" onSubmit={handleClose}>
-                  <Input className="min-w-56 flex-1" label="Actual cash counted (৳)" type="number" min="0" step="0.01" required value={actualCash} onChange={(event) => setActualCash(event.target.value)} />
+                  <Input className="min-w-56 flex-1" label="Actual cash counted (৳)" type="number" min="0" step="1" required value={actualCash} onChange={(event) => setActualCash(event.target.value)} />
                   <Button type="submit" disabled={saving}>{saving ? 'Closing…' : 'Close shift'}</Button>
                 </form>
               ) : <p className="m-0 text-sm text-slate-500"><T>{"POS write permission is required to close a shift."}</T></p>}

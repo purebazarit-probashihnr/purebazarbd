@@ -5,6 +5,7 @@ import { Barcode, LoaderCircle, Search } from 'lucide-react';
 import Input from '@/components/ui/input';
 import { posErrorMessage, scanPosItem, searchPosItems } from '@/services/pos';
 import useToastMessages from '@/hooks/use-toast-messages';
+import { formatMoney, formatWhole } from '@/services/money-format.cjs';
 
 export default function ItemScanner({ onAdd }) {
   const [query, setQuery] = useState('');
@@ -105,9 +106,9 @@ export default function ItemScanner({ onAdd }) {
                   <span className="flex items-center gap-1 text-xs text-slate-500"><Barcode size={12} /> {item.barcode}</span>
                 </span>
                 <span className="shrink-0 text-right text-xs">
-                  <span className="block font-semibold text-slate-900">৳{Number(item.mrp).toFixed(2)}</span>
+                  <span className="block font-semibold text-slate-900">{formatMoney(item.mrp)}</span>
                   <span className={item.stock > 0 ? 'text-emerald-700' : 'font-semibold text-red-700'}>
-                    {item.stock > 0 ? `${item.stock} in stock` : 'Stock out'}
+                    {item.stock > 0 ? `${item.stockLabel || formatWhole(item.stock)} in stock` : 'Stock out'}
                   </span>
                 </span>
               </button>

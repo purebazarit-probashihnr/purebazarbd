@@ -2,10 +2,10 @@ const mongoose = require('mongoose');
 
 const stockTransferLineSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
-  requestedQuantity: { type: Number, required: true, min: 0.000001 },
-  dispatchedQuantity: { type: Number, min: 0 },
-  receivedQuantity: { type: Number, min: 0 },
-  discrepancyQuantity: { type: Number, min: 0 },
+  requestedQuantity: { type: Number, required: true, min: 1, validate: { validator: Number.isInteger, message: 'Quantity must be a whole number' } },
+  dispatchedQuantity: { type: Number, min: 0, validate: { validator: Number.isInteger, message: 'Quantity must be a whole number' } },
+  receivedQuantity: { type: Number, min: 0, validate: { validator: Number.isInteger, message: 'Quantity must be a whole number' } },
+  discrepancyQuantity: { type: Number, min: 0, validate: { validator: Number.isInteger, message: 'Quantity must be a whole number' } },
 });
 
 const stockTransferSchema = new mongoose.Schema({

@@ -21,7 +21,7 @@ describe('Finance and workforce models', () => {
       status: 'CLOSED', closedAt: new Date(), closedBy: objectId(), expectedCash: 125.5, actualCash: 120,
     });
     await shift.validate();
-    expect(shift.cashDifference).toBe(-5.5);
+    expect(shift.cashDifference).toBe(-5);
   });
 
   it('calculates rounded salary totals and requires paid-sheet audit fields', async () => {
@@ -30,9 +30,9 @@ describe('Finance and workforce models', () => {
       lines: [{ employeeId: objectId(), baseSalary: 1000.105, allowances: 25, deductions: 10 }],
     });
     await sheet.validate();
-    expect(sheet.lines[0].baseSalary).toBe(1000.11);
-    expect(sheet.lines[0].netAmount).toBe(1015.11);
-    expect(sheet.totalAmount).toBe(1015.11);
+    expect(sheet.lines[0].baseSalary).toBe(1000);
+    expect(sheet.lines[0].netAmount).toBe(1015);
+    expect(sheet.totalAmount).toBe(1015);
 
     sheet.status = 'Paid';
     const error = await sheet.validate().catch((validationError) => validationError);

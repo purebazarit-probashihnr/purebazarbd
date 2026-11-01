@@ -22,16 +22,16 @@ describe('bill engine', () => {
     expect(bill).toMatchObject({
       subtotal: 1270,
       otherDiscountAmount: 0,
-      shareholderDiscountAmount: 63.5,
+      shareholderDiscountAmount: 64,
       vatAmount: 0,
-      grandTotal: 1206.5,
+      grandTotal: 1206,
       ledgerLines: [
-        { productId: 'oil', vendorPayable: 765, companyNet: 42.5, shareholderDiscountAmount: 42.5 },
+        { productId: 'oil', vendorPayable: 765, companyNet: 42, shareholderDiscountAmount: 43 },
         { productId: 'rice', vendorPayable: 378, companyNet: 21, shareholderDiscountAmount: 21 },
       ],
     });
     expect(bill.ledgerLines.reduce((total, line) => total + line.vendorPayable, 0)).toBe(1143);
-    expect(bill.ledgerLines.reduce((total, line) => total + line.companyNet, 0)).toBe(63.5);
+    expect(bill.ledgerLines.reduce((total, line) => total + line.companyNet, 0)).toBe(63);
   });
 
   it('applies a fixed bill discount then wallet discount before product VAT', () => {
@@ -50,8 +50,8 @@ describe('bill engine', () => {
       vatAmount: 57,
       grandTotal: 1197,
       ledgerLines: [
-        { vendorPayable: 765, companyNet: -2.01, vatAmount: 38.15 },
-        { vendorPayable: 378, companyNet: -0.99, vatAmount: 18.85 },
+        { vendorPayable: 765, companyNet: -2, vatAmount: 38 },
+        { vendorPayable: 378, companyNet: -1, vatAmount: 19 },
       ],
     });
     expect(bill.ledgerLines.reduce((total, line) => total + line.vendorPayable, 0)).toBe(1143);
@@ -73,10 +73,10 @@ describe('bill engine', () => {
     expect(bill).toMatchObject({
       subtotal: 1270,
       otherDiscountAmount: 155,
-      shareholderDiscountAmount: 55.75,
-      grandTotal: 1059.25,
+      shareholderDiscountAmount: 56,
+      grandTotal: 1059,
     });
-    expect(bill.ledgerLines.reduce((sum, line) => sum + line.discountAmount, 0)).toBe(210.75);
+    expect(bill.ledgerLines.reduce((sum, line) => sum + line.discountAmount, 0)).toBe(211);
     expect(bill.otherDiscountAmount + bill.shareholderDiscountAmount).toBeLessThanOrEqual(bill.subtotal);
   });
 
@@ -130,14 +130,14 @@ describe('bill engine', () => {
 
     expect(bill).toMatchObject({
       subtotal: 1270,
-      otherDiscountAmount: 221.5,
+      otherDiscountAmount: 222,
       shareholderDiscountAmount: 0,
-      vatAmount: 96.5,
+      vatAmount: 97,
       grandTotal: 1145,
     });
     expect(bill.ledgerLines.map((line) => line.vatRate)).toEqual([10, 5]);
     expect(bill.ledgerLines.map((line) => line.vendorPayable)).toEqual([765, 378]);
-    expect(bill.ledgerLines.reduce((total, line) => total + line.companyNet, 0)).toBe(-94.5);
+    expect(bill.ledgerLines.reduce((total, line) => total + line.companyNet, 0)).toBe(-95);
   });
 
   it('uses the default VAT rate when applicable and rejects discounts without reasons', () => {
@@ -149,8 +149,8 @@ describe('bill engine', () => {
 
     expect(bill).toMatchObject({
       subtotal: 100,
-      vatAmount: 7.5,
-      grandTotal: 107.5,
+      vatAmount: 8,
+      grandTotal: 108,
       ledgerLines: [{ vendorPayable: 0, companyNet: 100, vatRate: 7.5 }],
     });
     expect(() => calculateBill({

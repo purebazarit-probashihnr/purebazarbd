@@ -1,3 +1,5 @@
+const { roundHalfUp } = require('./money-format.cjs');
+
 function discountPayload(discount, label) {
   if (!discount || discount.value === '' || discount.value == null || Number(discount.value) === 0) return null;
   const value = Number(discount.value);
@@ -18,13 +20,14 @@ function requestItems(items) {
       throw new Error(`Enter a valid quantity for ${item.name}.`);
     }
     const discount = discountPayload(item.discount, `Discount for ${item.name}`);
-    if (item.unit === 'PIECE' && !Number.isInteger(quantity)) {
-      throw new Error(`Piece quantity for ${item.name} must be a whole number.`);
+    if (!Number.isInteger(quantity)) {
+      throw new Error(`Quantity for ${item.name} must be a whole number.`);
     }
     return {
       productId: item.productId,
       quantity,
-      ...(item.unit === 'PIECE' ? { unit: 'PIECE' } : {}),
+      ...(item.unit === 'PIECE' || item.unit === 'EXTRA' ? { unit: item.unit } : {}),
+      ...(item.unit === 'EXTRA' ? { unitName: item.unitName } : {}),
       ...(discount ? { discount } : {}),
     };
   });
@@ -55,7 +58,7 @@ function paymentTotalMatches(methods, amounts, total) {
   const paid = methods.reduce((sum, method) => (
     sum + Number(amounts[method])
   ), 0);
-  return Math.round((paid + Number.EPSILON) * 100) === Math.round((Number(total) + Number.EPSILON) * 100);
+  return methods.every((method) => Number.isInteger(Number(amounts[method]))) && paid === roundHalfUp(total);
 }
 
 module.exports = {

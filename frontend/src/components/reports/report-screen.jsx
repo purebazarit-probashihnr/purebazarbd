@@ -97,14 +97,13 @@ const reportConfig = {
   },
 };
 
-const moneyFormatter = new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT' });
-const numberFormatter = new Intl.NumberFormat('en-BD', { maximumFractionDigits: 4 });
+import { formatMoney, formatWhole } from '@/services/money-format.cjs';
 
 function formatValue(value, kind) {
   if (value === null || value === undefined || value === '') return '—';
-  if (kind === 'money') return moneyFormatter.format(value);
-  if (kind === 'percent') return `${numberFormatter.format(value)}%`;
-  if (kind === 'count' || kind === 'quantity' || kind === 'number') return numberFormatter.format(value);
+  if (kind === 'money') return formatMoney(value);
+  if (kind === 'percent') return `${formatWhole(value)}%`;
+  if (kind === 'count' || kind === 'quantity' || kind === 'number') return formatWhole(value);
   return String(value);
 }
 
@@ -221,7 +220,7 @@ export default function ReportScreen({ type }) {
             </select>
           </label>
         )}
-        {type === 'stock' && <Input label="Low-stock threshold" type="number" min="0" step="any" value={filters.lowStockThreshold} onChange={(event) => updateFilter('lowStockThreshold', event.target.value)} />}
+        {type === 'stock' && <Input label="Low-stock threshold" type="number" min="0" step="1" value={filters.lowStockThreshold} onChange={(event) => updateFilter('lowStockThreshold', event.target.value)} />}
         <div className="flex items-end gap-2">
           <Button type="submit" disabled={loading}>{loading ? 'Loading...' : 'Apply filters'}</Button>
           <Button type="button" variant="secondary" onClick={clearFilters} disabled={loading}>Clear</Button>

@@ -141,7 +141,7 @@ export default function AdvancesPage() {
               <option value=""><T>{"Select employee"}</T></option>
               {employees.filter((employee) => employee.status === 'ACTIVE').map((employee) => <option key={employee._id} value={employee._id}>{employee.employeeCode} · {employee.name}</option>)}
             </Select>
-            <Input label="Amount (BDT)" name="amount" type="number" min="0.01" step="0.01" required value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} />
+            <Input label="Amount (BDT)" name="amount" type="number" min="1" step="1" required value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} />
             <Input label="Reason" name="reason" required maxLength={500} value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} />
             <div className="flex items-end"><Button type="submit" disabled={saving || !employees.some((employee) => employee.status === 'ACTIVE')}>{saving ? 'Saving...' : 'Create request'}</Button></div>
             {!canReadEmployees && <p className="text-sm text-amber-700 sm:col-span-2 lg:col-span-3"><T>{"Employee directory access is required to create an advance request."}</T></p>}
