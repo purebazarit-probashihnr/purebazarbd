@@ -73,6 +73,35 @@ test('Form A labels and section headings have Bengali translations', () => {
   );
 });
 
+test('product form labels follow the language toggle without mixed-language labels', () => {
+  const formPath = path.join(srcDir, 'components/inventory/product-form-modal.jsx');
+  const source = fs.readFileSync(formPath, 'utf8');
+
+  for (const label of [
+    'Product name',
+    'Owner',
+    'Category',
+    'Brand',
+    'Unit Quantity / Value',
+    'Unit',
+    'Barcode',
+    'Vendor price (৳)',
+    'MRP (৳)',
+    'Pieces per Package',
+    'Retail Piece Price (Optional)',
+    'VAT applicable',
+    'VAT rate (%)',
+    'Save product',
+    'Saving...',
+    'e.g. 500',
+  ]) {
+    assert.notEqual(translate('bn', label), label, `${label} must have a Bengali translation`);
+  }
+  assert.match(source, /grid-cols-1 gap-4 md:grid-cols-2/);
+  assert.doesNotMatch(source, /Pieces per Package \(প্রতি প্যাকেজে/);
+  assert.doesNotMatch(source, /placeholder="খুচরা/);
+});
+
 test('Form A requires its KYB fields and excludes non-essential personal fields', () => {
   const formPath = path.join(srcDir, 'components/vendors/vendor-register-form.jsx');
   const source = fs.readFileSync(formPath, 'utf8');

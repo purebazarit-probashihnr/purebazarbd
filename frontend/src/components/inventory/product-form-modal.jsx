@@ -199,7 +199,7 @@ export default function ProductFormModal({
     <>
       <Modal open={open} onClose={onClose} title="Add new product" className="product-form-modal">
         <form className="space-y-5" onSubmit={submit}>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Input label="Product name" name="name" value={form.name} onChange={(event) => update('name', event.target.value)} required maxLength={150} autoFocus />
             <Select label="Owner" name="ownerType" value={form.ownerType} onChange={(event) => update('ownerType', event.target.value)}>
               <option value="COMPANY"><T>{"Company"}</T></option>
@@ -211,35 +211,35 @@ export default function ProductFormModal({
             <VendorAutocomplete token={token} value={form.vendorId} onChange={(id) => update('vendorId', id)} />
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex items-end gap-2">
-              <Select label="Category" name="categoryId" value={form.categoryId} onChange={(event) => update('categoryId', event.target.value)} required className="min-w-0 flex-1">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-2">
+              <Select label="Category" name="categoryId" value={form.categoryId} onChange={(event) => update('categoryId', event.target.value)} required className="w-full min-w-0">
                 <option value=""><T>{"Select category"}</T></option>
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </Select>
-              {can('categories:write') && <Button type="button" variant="secondary" size="sm" aria-label="Quick add category" title="Quick add category" onClick={() => setQuickAdd('category')}><Plus size={15} /> <T>{"Quick Add"}</T></Button>}
+              {can('categories:write') && <Button type="button" variant="secondary" size="sm" className="self-end" aria-label="Quick add category" title="Quick add category" onClick={() => setQuickAdd('category')}><Plus size={15} /> <T>{"Quick Add"}</T></Button>}
             </div>
-            <div className="flex items-end gap-2">
-              <Select label="Brand" name="brandId" value={form.brandId} onChange={(event) => update('brandId', event.target.value)} className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-col gap-2">
+              <Select label="Brand" name="brandId" value={form.brandId} onChange={(event) => update('brandId', event.target.value)} className="w-full min-w-0">
                 <option value=""><T>{"Select brand (optional)"}</T></option>
                 {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
               </Select>
-              {can('brands:write') && <Button type="button" variant="secondary" size="sm" aria-label="Quick add brand" title="Quick add brand" onClick={() => setQuickAdd('brand')}><Plus size={15} /> <T>{"Quick Add"}</T></Button>}
+              {can('brands:write') && <Button type="button" variant="secondary" size="sm" className="self-end" aria-label="Quick add brand" title="Quick add brand" onClick={() => setQuickAdd('brand')}><Plus size={15} /> <T>{"Quick Add"}</T></Button>}
             </div>
-            <div className="flex items-end gap-2">
-              <Input label="Unit Quantity / Value" name="unitValue" type="number" min="0" step="any" value={form.unitValue} onChange={(event) => update('unitValue', event.target.value)} placeholder="e.g. 500" className="min-w-0 flex-1" />
-              <Select label="Unit" name="unitId" value={form.unitId} onChange={(event) => update('unitId', event.target.value)} required className="min-w-0 flex-1">
+            <Input label="Unit Quantity / Value" name="unitValue" type="number" min="0" step="any" value={form.unitValue} onChange={(event) => update('unitValue', event.target.value)} placeholder="e.g. 500" className="w-full min-w-0" />
+            <div className="flex min-w-0 flex-col gap-2">
+              <Select label="Unit" name="unitId" value={form.unitId} onChange={(event) => update('unitId', event.target.value)} required className="w-full min-w-0">
                 <option value=""><T>{"Select unit"}</T></option>
                 {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>)}
               </Select>
-              {can('units:write') && <Button type="button" variant="secondary" size="sm" aria-label="Quick add unit" title="Quick add unit" onClick={() => setQuickAdd('unit')}><Plus size={15} /> <T>{"Quick Add"}</T></Button>}
+              {can('units:write') && <Button type="button" variant="secondary" size="sm" className="self-end" aria-label="Quick add unit" title="Quick add unit" onClick={() => setQuickAdd('unit')}><Plus size={15} /> <T>{"Quick Add"}</T></Button>}
             </div>
             <Input label="Barcode" name="barcode" value="Generated when product is saved" readOnly />
           </div>
           {catalogLoading && <p role="status" className="text-xs text-slate-500"><T>{"Loading product categories, brands, and units..."}</T></p>}
           {catalogErrors.map((message) => <p key={message} role="alert" className="text-xs text-amber-800">{message}</p>)}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Input label="Vendor price (৳)" name="vendorPrice" type="number" min="0" step="0.01" value={form.vendorPrice} onChange={(event) => update('vendorPrice', event.target.value)} required />
             <Input label="MRP (৳)" name="mrp" type="number" min="0" step="0.01" value={form.mrp} onChange={(event) => update('mrp', event.target.value)} required />
           </div>
@@ -252,9 +252,9 @@ export default function ProductFormModal({
             {marginWarning && !invalidMrp && <p role="status" className="mt-1 text-xs text-amber-800">Margin is below the {discountPercent}% shareholder discount threshold ({money(warningAmount)}).</p>}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Pieces per Package (প্রতি প্যাকেজে পিস সংখ্যা)" name="piecesPerPackage" type="number" min="1" step="any" value={form.piecesPerPackage} onChange={(event) => update('piecesPerPackage', event.target.value)} />
-            <Input label="Retail Piece Price (Optional)" placeholder="খুচরা পিস মূল্য (ঐচ্ছিক)" name="subUnitPriceOverride" type="number" min="0" step="0.01" value={form.subUnitPriceOverride} onChange={(event) => update('subUnitPriceOverride', event.target.value)} disabled={!hasPieces} />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Input label="Pieces per Package" name="piecesPerPackage" type="number" min="1" step="any" value={form.piecesPerPackage} onChange={(event) => update('piecesPerPackage', event.target.value)} />
+            <Input label="Retail Piece Price (Optional)" placeholder="Optional retail piece price" name="subUnitPriceOverride" type="number" min="0" step="0.01" value={form.subUnitPriceOverride} onChange={(event) => update('subUnitPriceOverride', event.target.value)} disabled={!hasPieces} />
           </div>
           {helperCost !== null && (
             <div role="status" className="space-y-1 text-xs text-slate-600">
@@ -263,17 +263,17 @@ export default function ProductFormModal({
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-slate-700">
               <input type="checkbox" name="vatApplicable" checked={form.vatApplicable} onChange={(event) => update('vatApplicable', event.target.checked)} />
-              VAT applicable
+              <T>{"VAT applicable"}</T>
             </label>
             <Input label="VAT rate (%)" name="vatRate" type="number" min="0" max="100" step="0.01" value={form.vatRate} onChange={(event) => update('vatRate', event.target.value)} required={form.vatApplicable} disabled={!form.vatApplicable} />
           </div>
 
           <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving || catalogLoading || !hasPrices || invalidMrp || invalidOverride}>{saving ? 'Saving...' : 'Save product'}</Button>
+            <Button type="button" variant="secondary" onClick={onClose}><T>{"Cancel"}</T></Button>
+            <Button type="submit" disabled={saving || catalogLoading || !hasPrices || invalidMrp || invalidOverride}><T>{saving ? "Saving..." : "Save product"}</T></Button>
           </div>
         </form>
       </Modal>

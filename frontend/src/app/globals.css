@@ -239,6 +239,7 @@ a { color: inherit; text-decoration: none; }
 .table-pagination > div { display: flex; gap: 4px; }
 .modal-backdrop { align-items: center; background: #101b28a6; backdrop-filter: blur(3px); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 100; }
 .modal-panel { background: #fff; border-radius: 7px; box-shadow: 0 24px 80px #07111f55; max-height: min(88vh, 800px); max-width: 560px; overflow-y: auto; width: 100%; }
+.product-form-modal { max-width: 860px; }
 .modal-header { align-items: center; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; padding: 14px 17px; }
 .modal-header h2 { font-size: 16px; margin: 0; }
 .modal-content { padding: 18px; }
