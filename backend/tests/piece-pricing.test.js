@@ -50,7 +50,7 @@ describe('margin-safe piece pricing', () => {
 
   it('prices a primary package from total MRP and derives piece price from total pieces', () => {
     const product = {
-      mrp: 1557, vendorPrice: 1200, unitValue: 10, unitsPerPackage: 120,
+      mrp: 1557, vendorPrice: 1200, unitValue: 10, unitsPerPackage: 12,
     };
 
     expect(packageUnitPrice(product)).toBe(155.7);

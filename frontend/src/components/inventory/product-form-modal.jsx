@@ -66,15 +66,16 @@ export default function ProductFormModal({
   const warningAmount = hasPrices ? roundedMoney(roundedMrp * discountPercent / 100) : 0;
   const marginWarning = margin !== null && margin >= 0 && margin < warningAmount;
   const invalidMrp = hasPrices && mrp < vendorPrice;
-  const unitsPerPackage = Number(totalPieces(form.unitValue === '' ? 1 : form.unitValue, form.piecesPerPackage));
+  const unitsPerPackage = Number(totalPieces(form.piecesPerPackage));
+  const unitQuantity = form.unitValue === '' ? 1 : form.unitValue;
   const hasPieces = Number.isInteger(unitsPerPackage) && unitsPerPackage > 1 && hasPrices;
-  const trueBaseCost = hasPieces ? basePieceCost(roundedMrp, unitsPerPackage) : null;
+  const trueBaseCost = hasPieces ? basePieceCost(roundedMrp, unitQuantity, unitsPerPackage) : null;
   const autoPiecePrice = hasPieces ? roundedMoney(trueBaseCost) : null;
   // Helper text depends only on MRP, quantity and pieces, so it updates on every keystroke.
-  const helperPieces = Number(totalPieces(form.unitValue === '' ? 1 : form.unitValue, form.piecesPerPackage));
+  const helperPieces = Number(totalPieces(form.piecesPerPackage));
   const helperMrp = form.mrp !== '' && Number.isFinite(mrp) ? roundedMoney(mrp) : null;
   const helperCost = helperMrp !== null && Number.isInteger(helperPieces) && helperPieces > 1
-    ? roundedMoney(basePieceCost(helperMrp, helperPieces)) : null;
+    ? roundedMoney(basePieceCost(helperMrp, unitQuantity, helperPieces)) : null;
   const overrideValue = form.subUnitPriceOverride === '' ? null : roundedMoney(Number(form.subUnitPriceOverride));
   const invalidOverride = hasPieces && overrideValue !== null
     && (!Number.isFinite(overrideValue) || overrideValue < trueBaseCost - 1e-9);
@@ -258,7 +259,7 @@ export default function ProductFormModal({
           </div>
           {helperCost !== null && (
             <div role="status" className="space-y-1 text-xs text-slate-600">
-              <p>Base piece cost: BDT {helperCost.toFixed(2)} (Calculated from {helperPieces} total pieces)</p>
+              <p>Base piece cost: BDT {helperCost.toFixed(2)} (Calculated from {helperPieces} pieces per package)</p>
               {invalidOverride && <p className="text-red-700">Custom piece price must be at least {autoPiecePrice.toFixed(2)}.</p>}
             </div>
           )}

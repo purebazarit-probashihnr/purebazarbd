@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const {
-  AuditLog, Order, Return, StockMovement, VendorLedger, WalletLog,
+  AuditLog, Order, Product, Return, StockMovement, VendorLedger, WalletLog,
 } = require('../models');
 const { statusError } = require('./posBillService');
 const { resolveOutlet } = require('./posCheckoutService');
@@ -124,10 +124,17 @@ async function returnBill(req) {
       }], { session }))[0];
       returnRecord = createdReturn;
 
+      const pieceIds = [...new Set(order.lines.filter((line) => line.unit === 'PIECE').map((line) => line.productId.toString()))];
+      const pieceProducts = pieceIds.length
+        ? await Product.find({ _id: { $in: pieceIds } }).select('_id unitsPerPackage').session(session).lean()
+        : [];
+      const piecesPer = new Map(pieceProducts.map((product) => [product._id.toString(), product.unitsPerPackage]));
       const quantities = new Map();
       order.lines.forEach((line) => {
         const productId = line.productId.toString();
-        quantities.set(productId, (quantities.get(productId) || 0) + line.quantity);
+        // Stock is kept in packages, so piece lines are converted back to packages.
+        const packages = line.unit === 'PIECE' ? line.quantity / (piecesPer.get(productId) || 1) : line.quantity;
+        quantities.set(productId, (quantities.get(productId) || 0) + packages);
       });
       await StockMovement.create([...quantities].map(([productId, quantity]) => ({
         productId: new mongoose.Types.ObjectId(productId),

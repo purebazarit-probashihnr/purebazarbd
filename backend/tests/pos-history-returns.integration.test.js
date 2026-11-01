@@ -9,6 +9,7 @@ jest.mock('../models', () => ({
   Order: {
     find: jest.fn(), findById: jest.fn(), findOneAndUpdate: jest.fn(),
   },
+  Product: { find: jest.fn() },
   Return: { create: jest.fn(), findOne: jest.fn() },
   StockMovement: { create: jest.fn() },
   User: { findById: jest.fn() },
@@ -31,6 +32,7 @@ const shareholderId = new mongoose.Types.ObjectId('65b000000000000000000016');
 function query(value) {
   const chain = {
     session: jest.fn(() => chain),
+    select: jest.fn(() => chain),
     sort: jest.fn(() => chain),
     limit: jest.fn(() => chain),
     lean: jest.fn(async () => value),
@@ -187,6 +189,17 @@ describe('POS history and returns API', () => {
     });
     expect(db.audits).toHaveLength(1);
     expect(session.endSession).toHaveBeenCalled();
+  });
+
+  it('restores piece sales to stock as fractions of a box', async () => {
+    db.order.lines = [{
+      productId, quantity: 2, unit: 'PIECE', total: 200,
+    }];
+    models.Product.find.mockReturnValue(query([{ _id: productId, unitsPerPackage: 6 }]));
+    const response = await request(app).post(`/api/pos/${orderId}/return`).set(auth()).send({});
+
+    expect(response.status).toBe(200);
+    expect(db.movements[0].quantity).toBeCloseTo(2 / 6, 10);
   });
 
   it('blocks a second return without posting duplicate stock or ledger entries', async () => {

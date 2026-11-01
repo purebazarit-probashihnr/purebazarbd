@@ -201,7 +201,7 @@ describe('POS checkout API', () => {
       vendorPrice: 1200,
       mrp: 1557,
       unitValue: 10,
-      unitsPerPackage: 120,
+      unitsPerPackage: 12,
     }]));
 
     const packageResponse = await checkout({
@@ -230,7 +230,7 @@ describe('POS checkout API', () => {
       vendorPrice: 1200,
       mrp: 1557,
       unitValue: 10,
-      unitsPerPackage: 120,
+      unitsPerPackage: 12,
     }]));
     db.movements = [{ productId, warehouseId: outletId, quantity: 10, type: 'GRN' }];
     const pieceResponse = await checkout({
@@ -244,7 +244,7 @@ describe('POS checkout API', () => {
       grandTotal: 12.98,
       lines: [{ quantity: 1, mrp: 12.98, subtotal: 12.98 }],
     });
-    expect(db.movements.at(-1).quantity).toBeCloseTo(-1 / 120, 10);
+    expect(db.movements.at(-1).quantity).toBeCloseTo(-1 / 12, 10);
   });
 
   it('completes a wallet sale without a member as MRP total minus 5%, with no Probashi call', async () => {

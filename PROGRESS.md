@@ -464,3 +464,9 @@
 	- Files: frontend/src/components/inventory/product-form-modal.jsx, frontend/src/app/globals.css, frontend/src/i18n/bn-pages.js, frontend/tests/i18n.test.mjs.
 	- Decisions: Widened the product modal; form grids use one column on small screens and two columns on wide screens. Unit fields and selects occupy full-width columns, with quick-add actions below fields. Product form labels and placeholders use the selected language without mixed-language labels.
 	- Validation: frontend tests pass (22); frontend production build passes.
+
+- [x] Fix package to piece conversion
+	- Files: backend/utils/piecePricing.js, models/Product.js, services/posHistoryReturnService.js; frontend services/unit-pieces.cjs, components/inventory/product-form-modal.jsx; tests package-piece-conversion.test.js, pos-history-returns, piece-pricing, pos, pos-cart-utils, frontend unit-pieces.
+	- Decisions: unitsPerPackage now stores pieces per package only (boxes x pieces per package). Unit Quantity / Value only divides price (per box = price / unit quantity; per piece = price / unit quantity / pieces per package; vendor per piece likewise, 240 for Tokma). Stock stays in boxes in stockmovements (1 pc = 1/6 box). Piece-line returns now restore pieces / pieces per package (previously restored the raw piece count as boxes). Existing products saved with unitsPerPackage = unit quantity x pieces need re-saving with pieces per package.
+	- Validation: backend jest passes (44 suites, 253 tests); frontend tests pass (22).
+

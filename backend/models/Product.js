@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { calculateSubUnitPrice, effectiveSubUnitPrice } = require('../utils/piecePricing');
+const { calculateSubUnitPrice, unitQuantityOf, effectiveSubUnitPrice } = require('../utils/piecePricing');
 const { generateEan13Barcode, isValidEan13 } = require('../utils/productIdentifiers');
 
 const productSchema = new mongoose.Schema({
@@ -35,7 +35,7 @@ productSchema.pre('validate', function calculateMargin() {
     this.margin = Math.round((this.mrp - this.vendorPrice + Number.EPSILON) * 100) / 100;
   }
   if (this.unitsPerPackage > 1 && Number.isFinite(this.mrp)) {
-    const floor = calculateSubUnitPrice(this.mrp, this.unitsPerPackage);
+    const floor = calculateSubUnitPrice(this.mrp, this.unitsPerPackage, unitQuantityOf(this));
     if (Number.isFinite(this.subUnitPriceOverride) && this.subUnitPriceOverride < floor) {
       this.invalidate('subUnitPriceOverride', `Piece price cannot be below the margin-safe price of ${floor.toFixed(2)}`);
     }

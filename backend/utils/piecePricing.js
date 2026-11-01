@@ -9,10 +9,16 @@ function roundUpToCent(value) {
   return Math.ceil(cents - 1e-9) / 100;
 }
 
-function calculateSubUnitPrice(packagePrice, unitsPerPackage) {
+function unitQuantityOf(product) {
+  const quantity = Number(product && product.unitValue);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
+// unitsPerPackage is pieces per package only; unitQuantity only scales the saved price down to one package.
+function calculateSubUnitPrice(packagePrice, unitsPerPackage, unitQuantity = 1) {
   const units = Number(unitsPerPackage);
   if (!Number.isInteger(units) || units < 1) return null;
-  return roundUpToCent(toCents(packagePrice) / units / 100);
+  return roundUpToCent(toCents(packagePrice) / unitQuantity / units / 100);
 }
 
 // Manager override wins; otherwise the margin-safe rounded-up price is used.
@@ -21,7 +27,7 @@ function effectiveSubUnitPrice(product) {
   if (Number.isFinite(product.subUnitPriceOverride)) {
     return Math.round((product.subUnitPriceOverride + Number.EPSILON) * 100) / 100;
   }
-  return calculateSubUnitPrice(product.mrp, product.unitsPerPackage);
+  return calculateSubUnitPrice(product.mrp, product.unitsPerPackage, unitQuantityOf(product));
 }
 
 function packageUnitPrice(product) {
@@ -45,11 +51,11 @@ function linePricing(product, item) {
   if (price === null) return null;
   return {
     unitPrice: price,
-    unitVendorPrice: product.vendorPrice / product.unitsPerPackage,
+    unitVendorPrice: product.vendorPrice / (unitQuantityOf(product) * product.unitsPerPackage),
     stockQuantity: item.quantity / product.unitsPerPackage,
   };
 }
 
 module.exports = {
-  calculateSubUnitPrice, effectiveSubUnitPrice, packageUnitPrice, roundUpToCent, linePricing,
+  calculateSubUnitPrice, unitQuantityOf, effectiveSubUnitPrice, packageUnitPrice, roundUpToCent, linePricing,
 };

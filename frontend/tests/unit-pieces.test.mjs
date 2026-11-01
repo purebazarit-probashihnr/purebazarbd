@@ -12,30 +12,26 @@ test('Dozen defaults to 12 pieces per package; other units stay open', () => {
   assert.equal(defaultPiecesPerPackage(null), '');
 });
 
-test('Test 1 (Dozen): 10 x 12 = 120 pieces, base cost 13.33, override 14 is valid', () => {
-  const total = totalPieces('10', '12');
-  assert.equal(total, '120');
-  const base = basePieceCost(1600, total);
+test('Dozen price: qty 10, 12 per dozen, MRP 1600 -> 12 pieces per package, base cost 13.33', () => {
+  const total = totalPieces('12');
+  assert.equal(total, '12');
+  const base = basePieceCost(1600, '10', total);
   assert.equal(r2(base), '13.33');
   assert.ok(14 >= base);
 });
 
-test('Test 2 (Box, custom 50): 5 x 50 = 250 pieces, base cost 4.00', () => {
-  const total = totalPieces('5', '50');
-  assert.equal(total, '250');
-  assert.equal(r2(basePieceCost(1000, total)), '4.00');
+test('Tokma: 6 pcs per box, MRP 33600 for 20 boxes -> 6 pieces, 280 per piece', () => {
+  assert.equal(totalPieces('6'), '6');
+  assert.equal(r2(basePieceCost(33600, '20', 6)), '280.00');
 });
 
-test('Changing pieces per package 12 -> 10 with MRP 1550, qty 10 gives 15.50 from 100 pieces', () => {
-  assert.equal(r2(basePieceCost(1550, totalPieces('10', '12'))), '12.92');
-  const total = totalPieces('10', '10');
-  assert.equal(total, '100');
-  assert.equal(r2(basePieceCost(1550, total)), '15.50');
+test('Unit quantity defaults to 1 when blank', () => {
+  assert.equal(r2(basePieceCost(1000, '', 250)), '4.00');
 });
 
 test('invalid input gives no total', () => {
-  assert.equal(totalPieces('', '12'), '');
-  assert.equal(totalPieces('0', '12'), '');
-  assert.equal(totalPieces('5', ''), '');
-  assert.equal(basePieceCost(100, ''), null);
+  assert.equal(totalPieces(''), '');
+  assert.equal(totalPieces('0'), '');
+  assert.equal(totalPieces('1'), '');
+  assert.equal(basePieceCost(100, '1', ''), null);
 });

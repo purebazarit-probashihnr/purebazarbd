@@ -48,7 +48,7 @@ describe('POS cart quantity rules', () => {
 
   it('calculates package and piece totals from total MRP', () => {
     const product = {
-      mrp: 1557, unitValue: 10, unitsPerPackage: 120, subUnitPrice: 12.98,
+      mrp: 1557, unitValue: 10, unitsPerPackage: 12, subUnitPrice: 12.98,
     };
     expect(unitPrice({ ...product, unit: 'PACKAGE' })).toBe(155.7);
     expect(lineTotal({ ...product, unit: 'PACKAGE', quantity: 1 })).toBe(155.7);
