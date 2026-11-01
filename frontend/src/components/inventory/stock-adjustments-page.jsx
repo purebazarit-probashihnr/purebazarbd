@@ -111,7 +111,7 @@ export default function StockAdjustmentsPage() {
       const product = productsById.get(String(line.productId));
       return `${line.productName || product?.name || String(line.productId).slice(-6)} (${Number(line.quantity) > 0 ? '+' : ''}${line.quantity})`;
     }).join(', ') },
-    { key: 'value', label: 'Value', render: money },
+    { key: 'value', label: 'Value', render: formatMoney },
     { key: 'status', label: 'Status', render: (status) => <Badge tone={statusTone[status] || 'neutral'}>{status}</Badge> },
     {
       key: 'actions',

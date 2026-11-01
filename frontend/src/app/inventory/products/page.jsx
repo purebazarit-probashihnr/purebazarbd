@@ -15,8 +15,8 @@ const columns = [
   { key: 'name', label: 'Product', render: (value, product) => product.displayName || value },
   { key: 'barcode', label: 'Barcode' },
   { key: 'ownerType', label: 'Owner', render: (value) => value === 'VENDOR' ? 'Vendor' : 'Company' },
-  { key: 'vendorPrice', label: 'Vendor price', render: money },
-  { key: 'mrp', label: 'MRP', render: money },
+  { key: 'vendorPrice', label: 'Vendor price', render: formatMoney },
+  { key: 'mrp', label: 'MRP', render: formatMoney },
   { key: 'margin', label: 'Margin', render: (value, product) => (
     <div className="flex items-center gap-2">
       <span>{formatMoney(value)}</span>
