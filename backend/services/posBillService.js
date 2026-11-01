@@ -1,7 +1,5 @@
 const Joi = require('joi');
-const {
-  Category, Product, Settings, Shareholder,
-} = require('../models');
+const { Category, Product, Settings } = require('../models');
 const { calculateBill } = require('./billEngine');
 const { linePricing } = require('../utils/piecePricing');
 
@@ -80,10 +78,7 @@ async function loadBill(body, user, settingsInput) {
     : [];
   const categoryRates = new Map(categories.map((category) => [category._id.toString(), category.vatRate]));
 
-  const shareholder = body.shareholderId ? await Shareholder.findById(body.shareholderId).lean() : null;
   const wallet = selected[0] === 'WALLET';
-  const verifiedMember = shareholder?.verified === true && shareholder.active === true;
-  const walletEligible = verifiedMember && shareholder.walletEnabled === true;
   const settings = settingsInput || await loadSettings();
   const pricing = body.items.map((item) => {
     const linePrice = linePricing(productsById.get(item.productId), item);
@@ -110,7 +105,7 @@ async function loadBill(body, user, settingsInput) {
       };
     }),
     paymentMethod: wallet ? 'WALLET' : selected[0],
-    shareholder: walletEligible ? { verified: true } : null,
+    shareholder: wallet ? { verified: true } : null,
     billDiscount: body.billDiscount,
     settings,
   });
@@ -125,10 +120,7 @@ async function loadBill(body, user, settingsInput) {
     lines: body.items.map((item, index) => ({
       item, product: productsById.get(item.productId), pricing: pricing[index],
     })),
-    payments,
-    shareholder,
-    verifiedMember,
-    walletEligible,
+    payments: wallet ? [{ method: 'WALLET', amount: bill.grandTotal }] : payments,
     wallet,
     settings,
     approvalRequired,
@@ -140,7 +132,6 @@ function billOutput(result) {
   return {
     ...result.bill,
     discountApprovalRequired: result.approvalRequired,
-    requiresVerifiedMember: result.wallet && !result.walletEligible,
   };
 }
 

@@ -168,15 +168,12 @@ describe('A full month of PureBazar operations', () => {
       items: [{ productId: ids.honey, quantity: 3 }, { productId: ids.rice, quantity: 2 }],
       payments: [{ method: 'CASH', amount: 400 }],
     }, 400);
-    res = await as(cashier).post('/api/pos/verify-member', { memberId: 'M-100' });
-    expect(res.status).toBe(200);
-    const shareholder = await m.Shareholder.findOne({ memberId: 'M-100' });
     const billB = await checkout({
       items: [{ productId: ids.honey, quantity: 2 }],
-      payments: [{ method: 'WALLET', amount: 190 }],
-      shareholderId: shareholder._id.toString(),
+      payments: [{ method: 'WALLET' }],
     }, 190);
     expect(billB.shareholderDiscountAmount).toBe(10);
+    expect(probashi.checkWalletBalance).not.toHaveBeenCalled();
     const billC = await checkout({
       items: [{ productId: ids.honey, quantity: 1 }],
       payments: [{ method: 'CASH', amount: 100 }],
@@ -195,14 +192,13 @@ describe('A full month of PureBazar operations', () => {
     expect(res.body.shift.expectedCash).toBe(900);
     expect(res.body.shift.cashDifference).toBe(-5);
 
-    // 6. Wallet reconciliation against the Probashi report
+    // 6. Wallet bills no longer carry a member, so there is nothing to reconcile per member
     probashi.getTransactionReport.mockResolvedValue({
       memberId: 'M-100', transactions: [{ transactionId: 'T-1', amount: 190, date: new Date().toISOString() }],
     });
     res = await as(admin).post('/api/finance/wallet-reconciliation/run', { date: dhakaDate(new Date()) });
     expect(res.status).toBe(200);
-    expect(res.body.totals).toMatchObject({ matched: 1, mismatch: 0, unresolved: 0 });
-    expect(res.body.records[0].orderNumber).toBe(billB.orderNumber);
+    expect(res.body.totals).toMatchObject({ matched: 0, mismatch: 0, unresolved: 0 });
 
     // 7. Vendor statement -> approve -> pay
     const now = new Date();

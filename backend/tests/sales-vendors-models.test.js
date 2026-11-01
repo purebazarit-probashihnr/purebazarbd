@@ -98,7 +98,7 @@ describe('Sales and vendor models', () => {
     const cases = [
       [new models.VendorLedger(), ['vendorId', 'orderId', 'productId', 'quantity', 'entryType', 'vendorPayable', 'companyNet']],
       [new models.Shareholder(), ['memberId', 'name', 'verified', 'active', 'walletEnabled']],
-      [new models.WalletLog(), ['memberId', 'orderId', 'amount', 'type']],
+      [new models.WalletLog(), ['orderId', 'amount', 'type']],
       [new models.WalletAuditLog(), ['memberId', 'action', 'succeeded', 'createdBy']],
       [new models.DiscountLog(), ['orderId', 'scope', 'discountType', 'amount', 'reason', 'appliedBy']],
     ];

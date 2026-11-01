@@ -454,3 +454,8 @@
 	- Files: `backend/tests/models.test.js`, `backend/tests/locations.integration.test.js`, `backend/tests/barcode-engine.test.js`.
 	- Decisions: Updated expected model registration, location activity status, and centered 50mm label barcode position.
 	- Validation: `npm.cmd --prefix backend test` passes (43 suites, 246 tests).
+
+- [x] POS wallet discount only
+	- Files: backend/services/posBillService.js, posCheckoutService.js, controllers/posController.js, routes/posRoutes.js, models/WalletLog.js; frontend pos-billing-page.jsx, bill-summary.jsx, services/pos.js (shareholder-modal.jsx removed); updated POS, e2e and model tests.
+	- Decisions: Wallet is only a full-bill payment method (no split) that applies the settings shareholder discount percent on the whole bill; no member verification, balance check or Probashi call in POS (/pos/verify-member removed). The server sets the wallet payment amount to the final total, and the frontend uses the server bill, which fixes the false 'Payments must equal the final bill total' error. DiscountLog and WalletLog record the discount with cashier and outlet (WalletLog.memberId is now optional). Wallet bills still count in the daily wallet total; stock and vendor ledger are unchanged. Wallet bills have no member, so per-member Probashi wallet reconciliation finds none of them.
+	- Validation: backend npm test passes (43 suites, 246 tests); frontend npm test and pos-billing-utils tests pass.

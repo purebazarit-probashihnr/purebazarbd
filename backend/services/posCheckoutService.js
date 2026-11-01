@@ -1,14 +1,10 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const {
-  AuditLog, DiscountLog, Location, Order, StockMovement, VendorLedger,
-  WalletAuditLog, WalletLog,
+  AuditLog, DiscountLog, Location, Order, StockMovement, VendorLedger, WalletLog,
 } = require('../models');
-const {
-  billOutput, loadBill, receiptData, statusError,
-} = require('./posBillService');
+const { loadBill, receiptData, statusError } = require('./posBillService');
 const { getDefaultPosOutlet } = require('./posOutletService');
-const probashiWalletService = require('./probashiWalletService');
 
 function money(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -32,28 +28,6 @@ function validatePayments(result) {
   if (enabled && payments.some((payment) => !enabled.includes(allowed[payment.method]))) {
     throw statusError('A selected payment method is disabled in Settings', 400);
   }
-  if (result.wallet && (!result.walletEligible || !result.shareholder)) {
-    throw statusError('Wallet payment requires an attached, verified shareholder', 403);
-  }
-}
-
-async function checkWallet(result, userId) {
-  if (!result.wallet) return null;
-  let balance;
-  try {
-    balance = await probashiWalletService.checkWalletBalance({
-      memberId: result.shareholder.memberId,
-      amount: result.bill.grandTotal,
-    });
-  } finally {
-    await WalletAuditLog.create({
-      memberId: result.shareholder.memberId,
-      action: 'WALLET_BALANCE_CHECK',
-      succeeded: Boolean(balance?.sufficient),
-      createdBy: userId,
-    });
-  }
-  return balance.sufficient;
 }
 
 async function resolveOutlet(body, user) {
@@ -93,22 +67,6 @@ async function commitBill(req, res, next, offline) {
       throw statusError('Discount exceeds this role limit; Super Admin approval is required', 403);
     }
     validatePayments(result);
-    const sufficient = await checkWallet(result, req.user._id);
-    if (sufficient === false) {
-      const repriced = await loadBill({
-        ...req.body,
-        payments: req.body.payments.map((payment) => ({
-          method: payment.method === 'WALLET' ? 'CASH' : payment.method,
-        })),
-        shareholderId: undefined,
-      }, req.user, result.settings);
-      return res.status(409).json({
-        success: false,
-        message: 'Insufficient wallet balance; the bill has been repriced at MRP',
-        sufficient: false,
-        bill: billOutput(repriced),
-      });
-    }
 
     const outletId = await resolveOutlet(req.body, req.user);
     const orderNumber = `POS-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -169,7 +127,6 @@ async function commitBill(req, res, next, offline) {
         grandTotal: result.bill.grandTotal,
         payments: result.payments,
         paymentStatus: 'PAID',
-        ...(result.verifiedMember ? { memberId: result.shareholder._id } : {}),
         cashier: req.user._id,
         outlet: outletId,
       }], { session });
@@ -196,10 +153,12 @@ async function commitBill(req, res, next, offline) {
       if (ledgerRows.length) await VendorLedger.create(ledgerRows, { session, ordered: true });
       if (result.wallet) {
         await WalletLog.create([{
-          memberId: result.shareholder._id,
           orderId: created._id,
           amount: result.bill.grandTotal,
           type: 'DEBIT',
+          discountAmount: result.bill.shareholderDiscountAmount,
+          cashier: req.user._id,
+          outlet: outletId,
         }], { session });
       }
       const discountRows = [];
@@ -223,7 +182,7 @@ async function commitBill(req, res, next, offline) {
       if (result.bill.shareholderDiscountAmount > 0) discountRows.push({
         orderId: created._id, scope: 'BILL', discountType: 'FIXED',
         amount: result.bill.shareholderDiscountAmount,
-        reason: 'Verified shareholder wallet discount', appliedBy: req.user._id,
+        reason: 'Wallet payment discount', appliedBy: req.user._id,
       });
       if (discountRows.length) await DiscountLog.create(discountRows, { session, ordered: true });
       await AuditLog.create([{

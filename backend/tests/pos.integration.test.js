@@ -166,51 +166,6 @@ describe('POS checkout API', () => {
     jest.restoreAllMocks();
   });
 
-  it('blocks wallet payment without a verified shareholder', async () => {
-    const response = await checkout({
-      items: line(), payments: [{ method: 'WALLET', amount: 100 }],
-    });
-    expect(response.status).toBe(403);
-    expect(response.body.message).toMatch(/verified shareholder/);
-    expect(db.orders).toHaveLength(0);
-    expect(walletService.checkWalletBalance).not.toHaveBeenCalled();
-  });
-
-  it('persists a successful member verification as verified for automatic discounts', async () => {
-    const verified = {
-      _id: shareholderId,
-      memberId: 'PB-001',
-      name: 'Verified Member',
-      mobile: '01700000000',
-      valid: true,
-      active: true,
-      walletEnabled: true,
-      verified: true,
-    };
-    walletService.verifyMember.mockResolvedValue({
-      memberId: verified.memberId,
-      name: verified.name,
-      mobile: verified.mobile,
-      valid: true,
-      active: true,
-      walletEnabled: true,
-    });
-    models.Shareholder.findOneAndUpdate.mockResolvedValue(verified);
-
-    const response = await request(app)
-      .post('/api/pos/verify-member')
-      .set(auth())
-      .send({ memberId: verified.memberId });
-
-    expect(response.status).toBe(200);
-    expect(models.Shareholder.findOneAndUpdate).toHaveBeenCalledWith(
-      { memberId: verified.memberId },
-      { $set: expect.objectContaining({ valid: true, verified: true }) },
-      expect.objectContaining({ upsert: true, runValidators: true }),
-    );
-    expect(response.body.shareholder).toMatchObject({ verified: true, active: true });
-  });
-
   it('automatically calculates verified shareholder discount after manual discounts', async () => {
     const response = await preview({
       items: line(),
@@ -292,21 +247,33 @@ describe('POS checkout API', () => {
     expect(db.movements.at(-1).quantity).toBeCloseTo(-1 / 120, 10);
   });
 
-  it('checks the final wallet total and returns MRP pricing when balance is insufficient', async () => {
-    walletService.checkWalletBalance.mockResolvedValue({ sufficient: false });
+  it('completes a wallet sale without a member as MRP total minus 5%, with no Probashi call', async () => {
     const response = await checkout({
-      items: line(),
-      payments: [{ method: 'WALLET', amount: 95 }],
-      shareholderId: shareholderId.toString(),
+      items: line(2), payments: [{ method: 'WALLET' }],
     });
-    expect(response.status).toBe(409);
-    expect(walletService.checkWalletBalance).toHaveBeenCalledWith({ memberId: 'PB-001', amount: 95 });
-    expect(response.body.bill).toMatchObject({
-      subtotal: 100, shareholderDiscountAmount: 0, grandTotal: 100,
+    expect(response.status).toBe(201);
+    expect(response.body.order).toMatchObject({
+      subtotal: 200, shareholderDiscountAmount: 10, grandTotal: 190,
+      payments: [{ method: 'WALLET', amount: 190 }],
     });
-    expect(db.orders).toHaveLength(0);
+    expect(walletService.checkWalletBalance).not.toHaveBeenCalled();
+    expect(walletService.verifyMember).not.toHaveBeenCalled();
+    expect(db.movements.at(-1)).toMatchObject({ quantity: -2, type: 'SALE' });
+    expect(db.ledgers[0]).toMatchObject({ quantity: 2, vendorPayable: 120, companyNet: 70 });
+    expect(db.discounts[0]).toMatchObject({ amount: 10, appliedBy: cashierId });
+    expect(db.walletLogs[0]).toMatchObject({
+      amount: 190, type: 'DEBIT', discountAmount: 10, cashier: cashierId, outlet: outletId,
+    });
+    expect(db.walletLogs[0].memberId).toBeUndefined();
   });
 
+  it('still rejects wallet combined with another method', async () => {
+    const response = await checkout({
+      items: line(), payments: [{ method: 'WALLET', amount: 50 }, { method: 'CASH', amount: 45 }],
+    });
+    expect(response.status).toBe(400);
+    expect(db.orders).toHaveLength(0);
+  });
   it('rolls back the order, stock, ledger, and audit writes on transaction failure', async () => {
     failLedger = true;
     const response = await checkout({
@@ -325,13 +292,11 @@ describe('POS checkout API', () => {
       items: line(2),
       billDiscount: { type: 'FIXED', value: 10, reason: 'Offer' },
       payments: [{ method: 'CASH', amount: 90 }, { method: 'CARD', amount: 100 }],
-      shareholderId: shareholderId.toString(),
     });
     expect(response.status).toBe(201);
     expect(response.body.order).toMatchObject({
       paymentStatus: 'PAID', subtotal: 200, otherDiscountAmount: 10, grandTotal: 190,
     });
-    expect(response.body.order.memberId.toString()).toBe(shareholderId.toString());
     expect(response.body.receipt.lines[0]).toMatchObject({
       quantity: 2, subtotal: 200, billDiscountAmount: 10, total: 190,
     });
