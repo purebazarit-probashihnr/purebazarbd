@@ -54,25 +54,36 @@ export default function StockCountsPage() {
       return undefined;
     }
     let active = true;
+    const canReadProducts = can(permissions, 'products:read');
     Promise.all([
       getLocations(token),
       getStockCounts(token),
-      can(permissions, 'products:read') ? getProducts(token) : Promise.resolve(null),
+      canReadProducts ? getProducts(token) : Promise.resolve(null),
     ])
       .then(([locationResponse, countResponse, productResponse]) => {
         if (!active) return;
-        const availableLocations = locationResponse.data.locations.filter((item) => item.isActive !== false);
+        const availableLocations = (locationResponse.data.locations || []).filter((item) => item.isActive !== false);
         setLocations(availableLocations);
 
         if (isRestrictedRole && assignedOutletId) {
           const assigned = availableLocations.find((loc) => loc.id === assignedOutletId);
-          setAssignedOutletName(assigned?.name || '');
-          setWarehouseId(assignedOutletId);
+          if (assigned) {
+            setAssignedOutletName(assigned.name);
+            setWarehouseId(assignedOutletId);
+          } else if (availableLocations.length > 0) {
+            setAssignedOutletName(availableLocations[0].name);
+            setWarehouseId(availableLocations[0].id);
+          } else {
+            setAssignedOutletName('No outlets available');
+            setWarehouseId('');
+          }
+        } else if (availableLocations.length > 0) {
+          setWarehouseId(availableLocations[0].id);
         } else {
-          setWarehouseId(availableLocations[0]?.id || '');
+          setWarehouseId('');
         }
 
-        setCounts(countResponse.data.stockCounts);
+        setCounts(countResponse.data.stockCounts || []);
         setProducts(productResponse?.data.products || []);
       })
       .catch((requestError) => active && setError(requestError.response?.data?.message || 'Unable to load stock count data.'))

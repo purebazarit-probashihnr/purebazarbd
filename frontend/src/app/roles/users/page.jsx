@@ -84,6 +84,10 @@ export default function RoleUsersPage() {
     const payload = { ...form };
     if (!payload.password) delete payload.password;
     if (!payload.locationId) delete payload.locationId;
+    // Use assignedLocation for API submission (backend expects locationId field)
+    if (payload.locationId && requiresLocation) {
+      payload.locationId = form.locationId;
+    }
     try {
       if (editingUser) await updateUser(token, editingUser.id, payload);
       else await createUser(token, payload);
@@ -190,24 +194,23 @@ export default function RoleUsersPage() {
             label="Role"
             name="roleId"
             value={form.roleId}
-            onChange={(event) => setForm({ ...form, roleId: event.target.value, locationId: '' })}
+            onChange={(event) => setForm({ ...form, roleId: event.target.value })}
             required
           >
             <option value="">Select a role</option>
             {roles.map((role) => <option key={role._id} value={role._id}>{role.name}</option>)}
           </Select>
-          {requiresLocation && (
-            <Select
-              label={isCashier ? 'Assign Outlet (POS)' : 'Assign Location'}
-              name="locationId"
-              value={form.locationId}
-              onChange={(event) => setForm({ ...form, locationId: event.target.value })}
-              required={requiresLocation}
-            >
-              <option value="">Select an outlet</option>
-              {outlets.map((outlet) => <option key={outlet.id} value={outlet.id}>{outlet.name}</option>)}
-            </Select>
-          )}
+          <Select
+            label={isCashier ? 'Assign Outlet (POS)' : 'Assign Location (Optional)'}
+            name="locationId"
+            value={form.locationId}
+            onChange={(event) => setForm({ ...form, locationId: event.target.value })}
+            required={requiresLocation}
+            disabled={!outlets.length}
+          >
+            <option value="">Select an outlet</option>
+            {outlets.map((outlet) => <option key={outlet.id} value={outlet.id}>{outlet.name}</option>)}
+          </Select>
           {editingUser && <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={form.isActive} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /> Account is active</label>}
           <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
             <Button variant="secondary" type="button" onClick={() => setDialogOpen(false)}>Cancel</Button>

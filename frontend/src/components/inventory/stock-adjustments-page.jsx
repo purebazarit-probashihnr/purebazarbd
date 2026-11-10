@@ -60,23 +60,33 @@ export default function StockAdjustmentsPage() {
     ])
       .then(([locationResponse, adjustmentResponse]) => {
         if (!active) return;
-        const availableLocations = locationResponse.data.locations.filter((item) => item.isActive !== false);
+        const availableLocations = (locationResponse.data.locations || []).filter((item) => item.isActive !== false);
         setLocations(availableLocations);
 
         if (isRestrictedRole && assignedOutletId) {
           const assigned = availableLocations.find((loc) => loc.id === assignedOutletId);
-          setAssignedOutletName(assigned?.name || '');
-          setWarehouseId(assignedOutletId);
+          if (assigned) {
+            setAssignedOutletName(assigned.name);
+            setWarehouseId(assignedOutletId);
+          } else if (availableLocations.length > 0) {
+            setAssignedOutletName(availableLocations[0].name);
+            setWarehouseId(availableLocations[0].id);
+          } else {
+            setAssignedOutletName('No outlets available');
+            setWarehouseId('');
+          }
+        } else if (availableLocations.length > 0) {
+          setWarehouseId(availableLocations[0].id);
         } else {
-          setWarehouseId(availableLocations[0]?.id || '');
+          setWarehouseId('');
         }
 
-        setAdjustments(adjustmentResponse.data.stockAdjustments);
+        setAdjustments(adjustmentResponse.data.stockAdjustments || []);
       })
       .catch((requestError) => active && setError(requestError.response?.data?.message || 'Unable to load stock adjustments.'))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [canRead, initialized, permissions, token, isRestrictedRole, assignedOutletId]);
+  }, [canRead, initialized, token, isRestrictedRole, assignedOutletId]);
 
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const reasonMismatch = (
