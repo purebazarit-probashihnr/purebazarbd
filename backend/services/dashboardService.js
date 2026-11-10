@@ -52,13 +52,14 @@ async function resolveLowStockThreshold(threshold) {
   return Number.isFinite(stored) ? stored : DEFAULT_LOW_STOCK_THRESHOLD;
 }
 
-async function lowStockAlerts(thresholdInput) {
+async function lowStockAlerts(thresholdInput, locationId) {
   // Outlets are always checked; the Central Warehouse only when the setting is enabled.
   const threshold = await resolveLowStockThreshold(thresholdInput);
   const settings = await Settings.findOne({ singleton: 'global' }).lean();
   const includeCentral = Boolean(settings && settings.centralWarehouseLowStockEnabled);
+  const locationFilter = includeCentral ? { $in: ['OUTLET', 'CENTRAL'] } : 'OUTLET';
   const [outlets, products] = await Promise.all([
-    Location.find({ type: includeCentral ? { $in: ['OUTLET', 'CENTRAL'] } : 'OUTLET' }).select('name').lean(),
+    Location.find(locationId ? { _id: locationId, type: locationFilter } : { type: locationFilter }).select('name').lean(),
     Product.find({}).select('name barcode unitsPerPackage unitId').populate('unitId', 'name').lean(),
   ]);
   const outletNames = new Map(outlets.map((outlet) => [String(outlet._id), outlet.name]));
@@ -72,7 +73,7 @@ async function lowStockAlerts(thresholdInput) {
   return [...quantities.entries()]
     .map(([key, total]) => ({ key, total, productId: key.split('|')[0], locationId: key.split('|')[1] }))
     .filter(({ productId, total }) =>     names.has(productId) && total < cents(threshold))
-    .map(({ productId, locationId, total }) => ({
+    .map(({ productId, locationId: locId, total }) => ({
       productId,
           quantityLabel: formatStockQuantity(
             total / 100,
@@ -81,24 +82,24 @@ async function lowStockAlerts(thresholdInput) {
           ),
       productName: names.get(productId).name,
       barcode: names.get(productId).barcode,
-      locationId,
-      locationName: outletNames.get(locationId),
+      locationId: locId,
+      locationName: outletNames.get(locId),
       quantity: total / 100,
     }))
     .sort((a, b) => a.quantity - b.quantity || a.productName.localeCompare(b.productName))
     .slice(0, LOW_STOCK_LIMIT);
 }
 
-async function getDashboard({ now = new Date(), lowStockThreshold } = {}) {
+async function getDashboard({ now = new Date(), lowStockThreshold, locationId } = {}) {
   const { dayStart, dayEnd, monthStart, monthEnd } = dhakaBounds(now);
   lowStockThreshold = await resolveLowStockThreshold(lowStockThreshold);
   const [orders, ledger, statements, expenses, recent, lowStock] = await Promise.all([
-    Order.find({ paymentStatus: 'PAID' }).lean(),
+    Order.find(locationId ? { paymentStatus: 'PAID', locationId } : { paymentStatus: 'PAID' }).lean(),
     VendorLedger.find({}).lean(),
     VendorStatement.find({ status: 'Approved' }).lean(),
     Expense.find({}).lean(),
     AuditLog.find({}).sort({ createdAt: -1 }).lean(),
-    lowStockAlerts(lowStockThreshold),
+    lowStockAlerts(lowStockThreshold, locationId),
   ]);
 
   const today = orders.filter((order) => soldTime(order) >= dayStart.getTime()

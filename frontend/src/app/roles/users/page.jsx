@@ -5,17 +5,18 @@ import Link from 'next/link';
 import { useSelector } from 'react-redux';
 import { Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { Badge, Button, Input, Modal, Select } from '@/components/ui';
-import { createUser, deleteUser, getRoles, getUsers, updateUser } from '@/services/admin';
+import { createUser, deleteUser, getRoles, getUsers, updateUser, getLocations } from '@/services/admin';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
 
-const emptyForm = { name: '', email: '', password: '', roleId: '', isActive: true };
+const emptyForm = { name: '', email: '', password: '', roleId: '', locationId: '', isActive: true };
 
 export default function RoleUsersPage() {
   const token = useSelector((state) => state.auth.token);
   const currentUser = useSelector((state) => state.auth.user);
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [outlets, setOutlets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -25,21 +26,27 @@ export default function RoleUsersPage() {
   const [form, setForm] = useState(emptyForm);
 
   async function refresh() {
-    const [usersResponse, rolesResponse] = await Promise.all([getUsers(token), getRoles(token)]);
+    const [usersResponse, rolesResponse, locationsResponse] = await Promise.all([
+      getUsers(token),
+      getRoles(token),
+      getLocations(token, { type: 'OUTLET' })
+    ]);
     setUsers(usersResponse.data.users);
     setRoles(rolesResponse.data.roles);
+    setOutlets(locationsResponse.data.locations || []);
   }
 
   useEffect(() => {
     if (!token) return;
     let active = true;
-    Promise.all([getUsers(token), getRoles(token)])
-      .then(([usersResponse, rolesResponse]) => {
+    Promise.all([getUsers(token), getRoles(token), getLocations(token, { type: 'OUTLET' })])
+      .then(([usersResponse, rolesResponse, locationsResponse]) => {
         if (!active) return;
         setUsers(usersResponse.data.users);
         setRoles(rolesResponse.data.roles);
+        setOutlets(locationsResponse.data.locations || []);
       })
-      .catch((requestError) => active && setError(requestError.response?.data?.message || 'Unable to load users.'))
+      .catch((requestError) => active && setError(requestError.response?.data?.message || 'Unable to load data.'))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, [token]);
@@ -53,10 +60,22 @@ export default function RoleUsersPage() {
 
   function startEdit(user) {
     setEditingUser(user);
-    setForm({ name: user.name, email: user.email, password: '', roleId: user.roleId, isActive: user.isActive });
+    setForm({
+      name: user.name,
+      email: user.email,
+      password: '',
+      roleId: user.roleId,
+      locationId: user.locationId || '',
+      isActive: user.isActive
+    });
     setError('');
     setDialogOpen(true);
   }
+
+  const selectedRole = roles.find((r) => r._id === form.roleId);
+  const isCashier = selectedRole && ['Cashier', 'Outlet Cashier'].includes(selectedRole.name);
+  const isInventoryManager = selectedRole && selectedRole.name === 'Inventory Manager';
+  const requiresLocation = isCashier || isInventoryManager;
 
   async function submit(event) {
     event.preventDefault();
@@ -105,7 +124,6 @@ export default function RoleUsersPage() {
         <Link href="/roles/users" aria-current="page" className="border-b-2 border-blue-600 pb-3 text-sm font-semibold text-blue-700"><T>{"Users"}</T></Link>
       </nav>
 
-
       <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
         <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
           <Users size={18} className="text-slate-500" />
@@ -139,12 +157,56 @@ export default function RoleUsersPage() {
 
       <Modal open={dialogOpen} onClose={() => setDialogOpen(false)} title={editingUser ? 'Edit user' : 'Add user'}>
         <form className="space-y-4" onSubmit={submit}>
-          <Input label="Full name" name="name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required minLength={2} maxLength={100} />
-          <Input label="Email address" name="email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required />
-          <Input label={editingUser ? 'New password (optional)' : 'Password'} name="password" type="password" autoComplete="new-password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required={!editingUser} minLength={8} maxLength={128} />
-          <Select label="Role" name="roleId" value={form.roleId} onChange={(event) => setForm({ ...form, roleId: event.target.value })} required>
+          <Input
+            label="Full name"
+            name="name"
+            value={form.name}
+            onChange={(event) => setForm({ ...form, name: event.target.value })}
+            required
+            minLength={2}
+            maxLength={100}
+          />
+          <Input
+            label="Email address"
+            name="email"
+            type="email"
+            value={form.email}
+            onChange={(event) => setForm({ ...form, email: event.target.value })}
+            required
+          />
+          <Input
+            label={editingUser ? 'New password (optional)' : 'Password'}
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            value={form.password}
+            onChange={(event) => setForm({ ...form, password: event.target.value })}
+            required={!editingUser}
+            minLength={8}
+            maxLength={128}
+          />
+          <Select
+            label="Role"
+            name="roleId"
+            value={form.roleId}
+            onChange={(event) => setForm({ ...form, roleId: event.target.value, locationId: '' })}
+            required
+          >
+            <option value="">Select a role</option>
             {roles.map((role) => <option key={role._id} value={role._id}>{role.name}</option>)}
           </Select>
+          {requiresLocation && (
+            <Select
+              label={isCashier ? 'Assign Outlet (POS)' : 'Assign Location'}
+              name="locationId"
+              value={form.locationId}
+              onChange={(event) => setForm({ ...form, locationId: event.target.value })}
+              required={requiresLocation}
+            >
+              <option value="">Select an outlet</option>
+              {outlets.map((outlet) => <option key={outlet.id} value={outlet.id}>{outlet.name}</option>)}
+            </Select>
+          )}
           {editingUser && <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={form.isActive} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /> Account is active</label>}
           <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
             <Button variant="secondary" type="button" onClick={() => setDialogOpen(false)}>Cancel</Button>

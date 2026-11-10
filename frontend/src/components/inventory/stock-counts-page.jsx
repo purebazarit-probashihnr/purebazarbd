@@ -29,8 +29,12 @@ export default function StockCountsPage() {
   const permissions = user?.permissions || [];
   const canRead = can(permissions, 'stock:read');
   const canWrite = can(permissions, 'stock:write');
+  const isSuperAdmin = user?.role === 'Super Admin';
+  const isRestrictedRole = ['INVENTORY_MANAGER', 'CASHIER'].includes(user?.role);
+  const assignedOutletId = user?.assignedLocation;
   const [counts, setCounts] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [assignedOutletName, setAssignedOutletName] = useState('');
   const [products, setProducts] = useState([]);
   const [stock, setStock] = useState([]);
   const [warehouseId, setWarehouseId] = useState('');
@@ -59,14 +63,22 @@ export default function StockCountsPage() {
         if (!active) return;
         const availableLocations = locationResponse.data.locations.filter((item) => item.isActive !== false);
         setLocations(availableLocations);
-        setWarehouseId(availableLocations[0]?.id || '');
+
+        if (isRestrictedRole && assignedOutletId) {
+          const assigned = availableLocations.find((loc) => loc.id === assignedOutletId);
+          setAssignedOutletName(assigned?.name || '');
+          setWarehouseId(assignedOutletId);
+        } else {
+          setWarehouseId(availableLocations[0]?.id || '');
+        }
+
         setCounts(countResponse.data.stockCounts);
         setProducts(productResponse?.data.products || []);
       })
       .catch((requestError) => active && setError(requestError.response?.data?.message || 'Unable to load stock count data.'))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [canRead, initialized, permissions, token]);
+  }, [canRead, initialized, permissions, token, isRestrictedRole, assignedOutletId]);
 
   useEffect(() => {
     if (!token || !warehouseId) return undefined;
@@ -187,10 +199,19 @@ export default function StockCountsPage() {
         <Card title="Start stock count" description="The system quantity is captured when the count is submitted.">
           <form className="space-y-4" onSubmit={submit}>
             <div className="grid gap-4 md:grid-cols-2">
-              <Select label="Warehouse or outlet" name="warehouseId" value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)}>
-                <option value=""><T>{"Choose a location"}</T></option>
-                {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-              </Select>
+              {isSuperAdmin ? (
+                <Select label="Warehouse or outlet" name="warehouseId" value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)}>
+                  <option value=""><T>{"Choose a location"}</T></option>
+                  {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                </Select>
+              ) : (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700"><T>{"Outlet"}</T></label>
+                  <Badge className="inline-block bg-blue-100 text-blue-800">
+                    {assignedOutletName || 'Loading...'}
+                  </Badge>
+                </div>
+              )}
               <Input label="Count reason" name="reason" value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} required placeholder="e.g. Monthly inventory count" />
             </div>
             <div className="grid gap-4 md:grid-cols-2">

@@ -25,8 +25,12 @@ export default function StockAdjustmentsPage() {
   const canRead = can(permissions, 'stock:read');
   const canWrite = can(permissions, 'stock:write');
   const canReadProducts = can(permissions, 'products:read');
+  const isSuperAdmin = user?.role === 'Super Admin';
+  const isRestrictedRole = ['INVENTORY_MANAGER', 'CASHIER'].includes(user?.role);
+  const assignedOutletId = user?.assignedLocation;
   const [adjustments, setAdjustments] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [assignedOutletName, setAssignedOutletName] = useState('');
   const [products, setProducts] = useState([]);
   const [matches, setMatches] = useState([]);
   const [warehouseId, setWarehouseId] = useState('');
@@ -58,13 +62,21 @@ export default function StockAdjustmentsPage() {
         if (!active) return;
         const availableLocations = locationResponse.data.locations.filter((item) => item.isActive !== false);
         setLocations(availableLocations);
-        setWarehouseId(availableLocations[0]?.id || '');
+
+        if (isRestrictedRole && assignedOutletId) {
+          const assigned = availableLocations.find((loc) => loc.id === assignedOutletId);
+          setAssignedOutletName(assigned?.name || '');
+          setWarehouseId(assignedOutletId);
+        } else {
+          setWarehouseId(availableLocations[0]?.id || '');
+        }
+
         setAdjustments(adjustmentResponse.data.stockAdjustments);
       })
       .catch((requestError) => active && setError(requestError.response?.data?.message || 'Unable to load stock adjustments.'))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [canRead, initialized, permissions, token]);
+  }, [canRead, initialized, permissions, token, isRestrictedRole, assignedOutletId]);
 
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const reasonMismatch = (
@@ -235,15 +247,24 @@ export default function StockAdjustmentsPage() {
         <Card title="New adjustment" description="Enter positive quantities; the selected mode determines whether stock is added or removed.">
           <form className="space-y-4" onSubmit={submit}>
             <div className="grid gap-4 md:grid-cols-2">
-              <Select label="Warehouse or outlet" name="warehouseId" value={warehouseId} onChange={(event) => {
-                setWarehouseId(event.target.value);
-                setLines([]);
-                setSearch('');
-                setMatches([]);
-              }}>
-                <option value=""><T>{"Choose a location"}</T></option>
-                {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-              </Select>
+              {isSuperAdmin ? (
+                <Select label="Warehouse or outlet" name="warehouseId" value={warehouseId} onChange={(event) => {
+                  setWarehouseId(event.target.value);
+                  setLines([]);
+                  setSearch('');
+                  setMatches([]);
+                }}>
+                  <option value=""><T>{"Choose a location"}</T></option>
+                  {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                </Select>
+              ) : (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700"><T>{"Outlet"}</T></label>
+                  <Badge className="inline-block bg-blue-100 text-blue-800">
+                    {assignedOutletName || 'Loading...'}
+                  </Badge>
+                </div>
+              )}
               <Select label="Adjustment mode" name="mode" value={mode} onChange={(event) => setMode(event.target.value)}>
                 <option value="REMOVE"><T>{"Remove stock"}</T></option>
                 <option value="ADD"><T>{"Add stock"}</T></option>

@@ -20,3 +20,8 @@ export const getAuditLogs = (token, filters = {}) => api.get('/audit-logs', {
   ...authConfig(token),
   params: Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== '')),
 });
+
+export const getLocations = (token, filters = {}) => api.get('/locations', {
+  ...authConfig(token),
+  params: Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== '')),
+});

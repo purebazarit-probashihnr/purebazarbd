@@ -15,6 +15,7 @@ function publicUser(user) {
     role: role?.name || null,
     isActive: user.isActive,
     locationId: user.locationId?.toString() || null,
+    assignedLocation: (user.assignedLocation || user.locationId)?.toString() || null,
     createdAt: user.createdAt,
   };
 }

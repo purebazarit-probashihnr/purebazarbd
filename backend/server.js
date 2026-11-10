@@ -23,6 +23,7 @@ const vendorRoutes = require('./routes/vendorRoutes');
 const financeRoutes = require('./routes/financeRoutes');
 const payrollRoutes = require('./routes/payrollRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const locationRoutes = require('./routes/locationRoutes');
 const { startSettlementJob } = require('./services/vendorSettlementJob');
 
 const app = express();
@@ -49,6 +50,7 @@ app.use('/api/vendors', vendorRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/locations', locationRoutes);
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api', stockRoutes);

@@ -3,6 +3,7 @@
 import {
   useCallback, useEffect, useRef, useState,
 } from 'react';
+import { Badge } from '@/components/ui';
 import useAuth from '@/store/use-auth';
 import CartPanel from './cart-panel';
 import BillSummary from './bill-summary';
@@ -32,6 +33,10 @@ export default function PosBillingPage() {
   const canRead = hasPermission('pos:read');
   const canWrite = hasPermission('pos:write');
   const canApprove = user?.role === 'Super Admin';
+  const isSuperAdmin = user?.role === 'Super Admin';
+  const isRestrictedRole = ['INVENTORY_MANAGER', 'CASHIER'].includes(user?.role);
+  const assignedOutletId = user?.assignedLocation;
+  const assignedOutletName = user?.name ? `${user.name}'s Outlet` : 'Assigned Outlet';
   const [items, setItems] = useState([]);
   const [billDiscount, setBillDiscount] = useState(null);
   const [methods, setMethods] = useState(['CASH']);
@@ -277,6 +282,13 @@ export default function PosBillingPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500"><T>{"Sales"}</T></p>
           <h1 className="text-2xl font-semibold text-slate-900"><T>{"Point of Sale"}</T></h1>
           <p className="mt-1 text-sm text-slate-600"><T>{"Scan items, apply permitted discounts, and complete a bill."}</T></p>
+          {isRestrictedRole && assignedOutletId && (
+            <div className="mt-2">
+              <Badge className="inline-block bg-blue-100 text-blue-800">
+                Outlet: {assignedOutletName}
+              </Badge>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={holdSale} disabled={!items.length || checkoutLoading} className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"><T>{"Hold Sale"}</T></button>

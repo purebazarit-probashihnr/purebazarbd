@@ -8,7 +8,7 @@ const validateRequest = require('../middlewares/validateRequest');
 const router = express.Router();
 
 router.get('/locations', authMiddleware, authorizeMiddleware({
-  anyPermissions: ['stock:read', 'stock:transfer:read', 'expenses:read'],
+  anyPermissions: ['stock:read', 'stock:transfer:read', 'expenses:read', 'users:read'],
 }), [
   query('type').optional().isIn(['CENTRAL', 'OUTLET']).withMessage('Location type must be CENTRAL or OUTLET'),
 ], validateRequest, locationController.listLocations);
