@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true },
   roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Role', required: true },
   locationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location' },
+  assignedLocation: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 

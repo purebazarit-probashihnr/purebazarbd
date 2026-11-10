@@ -51,6 +51,7 @@ async function loadUser(userId, req, next) {
       role: role?.name || null,
       roleId: role?._id || user.roleId,
       locationId: user.locationId || null,
+      assignedLocation: user.assignedLocation || user.locationId || null,
       permissions: expandPermissions(Array.isArray(role?.permissions)
         ? role.permissions
         : Array.isArray(user.permissions) ? user.permissions : []),

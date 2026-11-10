@@ -6,6 +6,7 @@ const posShiftController = require('../controllers/posShiftController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const authorizeMiddleware = require('../middlewares/authorizeMiddleware');
 const validateRequest = require('../middlewares/validateRequest');
+const enforceLocationScope = require('../middlewares/enforceLocationScope');
 
 const router = express.Router();
 const read = [authMiddleware, authorizeMiddleware({ permissions: ['pos:read'] })];
@@ -18,7 +19,7 @@ const validDate = (value) => {
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 };
 
-router.get('/history', read, [
+router.get('/history', read, enforceLocationScope, [
   query('outlet').optional().isMongoId(),
   query('cashier').optional().isMongoId(),
   query('shareholderId').optional().isMongoId(),
@@ -33,23 +34,23 @@ router.get('/history', read, [
     !value.from || !value.to || new Date(value.from) <= new Date(value.to)
   )).withMessage('from must be before or equal to to'),
 ], validateRequest, posHistoryController.listSalesHistory);
-router.get('/shifts/current', manageShifts, posShiftController.getCurrentShift);
-router.get('/shifts/:shiftId/report', manageShifts, [
+router.get('/shifts/current', manageShifts, enforceLocationScope, posShiftController.getCurrentShift);
+router.get('/shifts/:shiftId/report', manageShifts, enforceLocationScope, [
   param('shiftId').isMongoId(),
 ], validateRequest, posShiftController.getShiftReport);
-router.post('/shifts', manageShifts, [
+router.post('/shifts', manageShifts, enforceLocationScope, [
   body('openingCash').isFloat({ min: 0 }).toFloat().custom((value) => (
     Math.abs(value * 100 - Math.round(value * 100)) < 1e-8
   )).withMessage('Opening cash must have at most two decimal places'),
   body('outletId').optional().isMongoId(),
 ], validateRequest, posShiftController.openShift);
-router.post('/shifts/:shiftId/close', manageShifts, [
+router.post('/shifts/:shiftId/close', manageShifts, enforceLocationScope, [
   param('shiftId').isMongoId(),
   body('actualCash').isFloat({ min: 0 }).toFloat().custom((value) => (
     Math.abs(value * 100 - Math.round(value * 100)) < 1e-8
   )).withMessage('Actual cash must have at most two decimal places'),
 ], validateRequest, posShiftController.closeShift);
-router.post('/:orderId/return', write, [
+router.post('/:orderId/return', write, enforceLocationScope, [
   param('orderId').isMongoId(),
   body('walletRefunded').optional().isBoolean().toBoolean(),
   body('walletRefundMethod').optional().isIn(['MANUAL', 'API']),
@@ -73,7 +74,7 @@ router.post('/verify-member', write, [
   body().custom((value) => Boolean(value.memberId || value.mobile))
     .withMessage('A member ID or mobile is required'),
 ], validateRequest, posController.verifyMember);
-router.post('/checkout', write, posController.finalizeBill);
-router.post('/offline-sync', write, posController.syncOfflineBill);
+router.post('/checkout', write, enforceLocationScope, posController.finalizeBill);
+router.post('/offline-sync', write, enforceLocationScope, posController.syncOfflineBill);
 
 module.exports = router;

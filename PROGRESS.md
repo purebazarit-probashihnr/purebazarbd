@@ -40,6 +40,10 @@
 	- Files: Added the useAuth hook, session restoration through /auth/me, protected routes, permission-filtered navigation, and sign-out controls; completed the API-backed role and user screens with administration tabs.
 	- Decisions: Keep the short-lived JWT in sessionStorage across reloads; use the backend role permissions for menu and route visibility, and restrict role administration to Super Admin.
 	- Validation: Backend tests pass (7 suites, 23 tests); frontend production build passes. Playwright browser flow verified sign-in, sign-out, session restore, live role/user API pages, route denial, and 9 Super Admin menus versus 2 cashier menus.
+- [x] Auth assigned location
+	- Files: User model, auth controller and middleware, and auth integration tests.
+	- Decisions: Expose assignedLocation with a fallback to the existing locationId; preserve existing locationId behavior and reload role and location from the user record on each request.
+	- Validation: Focused auth and middleware tests pass (2 suites, 12 tests).
 - [x] 1.4 Users and roles management
 	- Files: Super Admin-only users/roles CRUD APIs with input validation, hashed passwords, audit events, integration tests, and API-backed frontend management pages; grouped role-permission controls, safe presets, sensitive-access warnings, and a backend permission allowlist.
 	- Decisions: Protect the Super Admin role from modification/deletion; prevent deleting assigned roles and the signed-in user; expose user records without password hashes; preserve established permission keys and reject unsupported or duplicate permission values.
@@ -598,6 +602,11 @@
 	- Decisions: reuses stockText/formatStock from services/stock-units.cjs (same as POS and Stock Count); totals are formatted only when all products share one pack ratio, otherwise plain number. Saved monthly statement documents unchanged.
 	- Validation: vendor jest suites pass.
 - [x] UI: fix available stock summary card to avoid decimal float values
+
+- [x] Feature: apply enforceLocationScope middleware to POS routes
+	- Files: backend/routes/posRoutes.js (import and apply middleware), backend/services/posCheckoutService.js (resolveOutlet logic updated), backend/tests/pos-location-scope.integration.test.js (new test suite).
+	- Decisions: enforce location scope for CASHIER and INVENTORY_MANAGER roles on checkout, history, returns, and shift management routes; SUPER_ADMIN bypasses; resolveOutlet prioritizes assignedLocation for these roles. Middleware sets req.query.locationId and req.body.locationId to override any client-supplied outlet.
+	- Validation: all 6 POS test suites pass (38 tests); middleware correctly rejects CASHIER without assignedLocation; routes applied: GET /history, GET /shifts/current, GET /shifts/:shiftId/report, POST /shifts, POST /shifts/:shiftId/close, POST /:orderId/return, POST /checkout, POST /offline-sync.
 	- Files: frontend/src/components/vendors/vendor-format.js (totalStock now sums per-product fields grouped by pack ratio and formats each group as Box/Dozen and Pcs, joined by ' + '), vendor-overview.jsx, vendor-statement-invoice.jsx.
 	- Validation: syntax check only.
 - [x] UI: simplify vendor details view by keeping only active products summary and core stock columns

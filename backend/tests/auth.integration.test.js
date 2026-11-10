@@ -15,6 +15,7 @@ const errorMiddleware = require('../middlewares/errorMiddleware');
 const secret = 'auth-integration-test-secret-that-is-long-enough';
 const userId = '65b000000000000000000001';
 const roleId = '65b000000000000000000002';
+const locationId = '65b000000000000000000003';
 const user = {
   _id: { toString: () => userId },
   name: 'Admin User',
@@ -55,7 +56,7 @@ describe('auth endpoints', () => {
     expect(response.headers.authorization).toMatch(/^Bearer /);
     expect(response.body).toMatchObject({
       success: true,
-      user: { id: userId, name: 'Admin User', email: 'admin@example.test', role: 'Super Admin' },
+      user: { id: userId, name: 'Admin User', email: 'admin@example.test', role: 'Super Admin', assignedLocation: null },
     });
     expect(response.body.user.passwordHash).toBeUndefined();
     expect(jwt.verify(response.body.token, secret).sub).toBe(userId);
@@ -85,8 +86,51 @@ describe('auth endpoints', () => {
 
     expect(denied.status).toBe(401);
     expect(profile.status).toBe(200);
-    expect(profile.body.user).toMatchObject({ id: userId, email: 'admin@example.test' });
+    expect(profile.body.user).toMatchObject({ id: userId, email: 'admin@example.test', role: 'Super Admin', assignedLocation: null });
     expect(loggedOut.status).toBe(200);
     expect(AuditLog.create).toHaveBeenCalledWith(expect.objectContaining({ action: 'LOGOUT', actorId: user._id }));
+  });
+
+  it.each([
+    ['explicit', { assignedLocation: locationId, locationId: '65b000000000000000000004' }],
+    ['legacy', { locationId }],
+  ])('returns the %s location and current role on login and /me', async (label, location) => {
+    const assignedUser = { ...user, ...location, roleId: { ...user.roleId, name: 'Outlet Cashier' } };
+    User.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(assignedUser) }),
+    });
+    User.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(assignedUser) });
+
+    const login = await request(app).post('/api/auth/login')
+      .send({ email: user.email, password: 'correct-password' });
+    const profile = await request(app).get('/api/auth/me')
+      .set('Authorization', `Bearer ${login.body.token}`);
+
+    expect(login.status).toBe(200);
+    expect(profile.status).toBe(200);
+    expect(login.body.user).toMatchObject({ role: 'Outlet Cashier', assignedLocation: locationId });
+    expect(profile.body.user).toMatchObject({ role: 'Outlet Cashier', assignedLocation: locationId, locationId: location.locationId });
+  });
+
+  it('passes authentication lookup errors to the error handler', async () => {
+    User.findById.mockReturnValue({ populate: jest.fn().mockRejectedValue(new Error('Database unavailable')) });
+    const token = jwt.sign({ sub: userId }, secret, { expiresIn: '1h' });
+
+    const response = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe('Internal server error');
+  });
+
+  it('defines an optional Location reference with a null default', () => {
+    const UserModel = require('../models/User');
+    const path = UserModel.schema.path('assignedLocation');
+    const model = new UserModel({ name: 'Admin', email: 'admin@example.test', passwordHash: 'hash', roleId });
+
+    expect(path.instance).toBe('ObjectId');
+    expect(path.options.ref).toBe('Location');
+    expect(model.assignedLocation).toBeNull();
+    model.assignedLocation = locationId;
+    expect(model.assignedLocation.toString()).toBe(locationId);
   });
 });

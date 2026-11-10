@@ -97,6 +97,9 @@ describe('goods receive and movement-derived stock endpoints', () => {
       endSession: jest.fn(),
     };
     jest.spyOn(mongoose, 'startSession').mockResolvedValue(session);
+    jest.spyOn(mongoose.connection, 'collection').mockReturnValue({
+      bulkWrite: jest.fn().mockResolvedValue({ result: { ok: 1 } }),
+    });
     User.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(admin) });
     Location.findById.mockReturnValue({
       select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue({ type: 'CENTRAL' }) }),

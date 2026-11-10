@@ -181,28 +181,80 @@ async function listGoodsReceives(req, res, next) {
 }
 
 async function createGoodsReceive(req, res, next) {
+  let session;
   try {
     const lines = normalizeLines(req.body.lines);
-    await validateCentralWarehouse(req.body.warehouseId);
+    
+    // Determine locationId based on user role
+    let locationId = req.body.warehouseId;
+    if (req.user.role === 'SUPER_ADMIN') {
+      locationId = req.body.warehouseId || req.body.locationId;
+    } else if (req.user.role === 'INVENTORY_MANAGER' || req.user.role === 'Staff') {
+      locationId = req.user.assignedLocation;
+      if (!locationId) {
+        throw statusError('User must have an assigned location', 403);
+      }
+    }
+    
+    if (!locationId) {
+      throw statusError('A valid location (warehouse) ID is required', 400);
+    }
+    
+    await validateCentralWarehouse(locationId);
     await validateProducts(req.body.ownerType, req.body.vendorId, lines);
     if (req.body.ownerType === 'VENDOR' && !req.body.vendorChallanNumber) {
       throw statusError('Vendor purchases require a challan number', 400);
     }
-    const [receive] = await GoodsReceive.create([{
-      ownerType: req.body.ownerType,
-      ...(req.body.vendorId ? { vendorId: req.body.vendorId } : {}),
-      warehouseId: req.body.warehouseId,
-      ...(req.body.vendorChallanNumber ? { vendorChallanNumber: req.body.vendorChallanNumber } : {}),
-      lines,
-      createdBy: req.user._id,
-    }]);
-    await AuditLog.create({
-      actorId: req.user._id, action: 'CREATE', entity: 'GoodsReceive', entityId: receive._id,
-      after: receive.toObject(), ipAddress: req.ip,
+    
+    session = await mongoose.startSession();
+    let output;
+    await session.withTransaction(async () => {
+      const [receive] = await GoodsReceive.create([{
+        ownerType: req.body.ownerType,
+        ...(req.body.vendorId ? { vendorId: req.body.vendorId } : {}),
+        warehouseId: locationId,
+        ...(req.body.vendorChallanNumber ? { vendorChallanNumber: req.body.vendorChallanNumber } : {}),
+        lines,
+        createdBy: req.user._id,
+      }], { session });
+      
+      // Upsert stock quantities directly in warehousestocks collection
+      const stockUpdates = lines.map(line => ({
+        updateOne: {
+          filter: {
+            locationId: new mongoose.Types.ObjectId(locationId),
+            productId: line.productId,
+          },
+          update: {
+            $inc: { quantity: line.acceptedQuantity || 0 },
+            $set: {
+              locationId: new mongoose.Types.ObjectId(locationId),
+              productId: line.productId,
+              updatedAt: new Date(),
+            },
+          },
+          upsert: true,
+        },
+      }));
+      
+      if (stockUpdates.length > 0) {
+        const warehouseStocksCollection = mongoose.connection.collection('warehousestocks');
+        await warehouseStocksCollection.bulkWrite(stockUpdates, { session });
+      }
+      
+      await AuditLog.create([{
+        actorId: req.user._id, action: 'CREATE', entity: 'GoodsReceive', entityId: receive._id,
+        after: receive.toObject(), ipAddress: req.ip,
+      }], { session });
+      
+      output = receiveOutput(receive);
     });
-    return res.status(201).json({ success: true, goodsReceive: receiveOutput(receive) });
+    
+    return res.status(201).json({ success: true, goodsReceive: output });
   } catch (error) {
     return next(error);
+  } finally {
+    if (session) await session.endSession();
   }
 }
 
@@ -285,19 +337,46 @@ async function approveGoodsReceive(req, res, next) {
       receive.status = 'Approved';
       receive.approvedBy = req.user._id;
       await receive.save({ session });
-      const movements = receive.lines
-        .filter((line) => line.acceptedQuantity > 0)
-        .map((line) => ({
-          productId: line.productId,
-          warehouseId: receive.warehouseId,
-          quantity: line.acceptedQuantity,
-          type: 'GRN',
-          userId: req.user._id,
-          reason: `Goods receive ${receive._id}`,
-          referenceId: receive._id,
-          referenceType: 'GoodsReceive',
-        }));
+      
+      const acceptedLines = receive.lines.filter((line) => line.acceptedQuantity > 0);
+      
+      // Create stock movements for audit trail
+      const movements = acceptedLines.map((line) => ({
+        productId: line.productId,
+        warehouseId: receive.warehouseId,
+        quantity: line.acceptedQuantity,
+        type: 'GRN',
+        userId: req.user._id,
+        reason: `Goods receive ${receive._id}`,
+        referenceId: receive._id,
+        referenceType: 'GoodsReceive',
+      }));
       if (movements.length) await StockMovement.create(movements, { session, ordered: true });
+      
+      // Upsert stock quantities directly in warehousestocks collection
+      const stockUpdates = acceptedLines.map(line => ({
+        updateOne: {
+          filter: {
+            locationId: receive.warehouseId,
+            productId: line.productId,
+          },
+          update: {
+            $inc: { quantity: line.acceptedQuantity },
+            $set: {
+              locationId: receive.warehouseId,
+              productId: line.productId,
+              updatedAt: new Date(),
+            },
+          },
+          upsert: true,
+        },
+      }));
+      
+      if (stockUpdates.length > 0) {
+        const warehouseStocksCollection = mongoose.connection.collection('warehousestocks');
+        await warehouseStocksCollection.bulkWrite(stockUpdates, { session });
+      }
+      
       await AuditLog.create([{
         actorId: req.user._id, action: 'APPROVE', entity: 'GoodsReceive', entityId: receive._id,
         before, after: receive.toObject(), ipAddress: req.ip,

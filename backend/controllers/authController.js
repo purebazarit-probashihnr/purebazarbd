@@ -13,6 +13,7 @@ function publicUser(user) {
     email: user.email,
     role: role?.name || null,
     roleId: role?._id?.toString() || user.roleId?.toString() || null,
+    assignedLocation: (user.assignedLocation || user.locationId)?.toString() || null,
     permissions: expandPermissions(Array.isArray(role?.permissions) ? role.permissions : []),
   };
 }

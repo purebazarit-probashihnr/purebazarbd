@@ -62,7 +62,12 @@ async function checkWallet(result, userId) {
 }
 
 async function resolveOutlet(body, user) {
-  const outletId = body.outletId || user.locationId;
+  // For CASHIER and INVENTORY_MANAGER: use assignedLocation strictly
+  // For SUPER_ADMIN: allow override via body.outletId or use locationId, then default
+  const outletId = (user.role === 'CASHIER' || user.role === 'INVENTORY_MANAGER')
+    ? user.assignedLocation
+    : (body.outletId || user.locationId);
+  
   const outlet = outletId
     ? await Location.findById(outletId).lean()
     : await getDefaultPosOutlet();
