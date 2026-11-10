@@ -83,6 +83,7 @@ export default function RoleUsersPage() {
     setError('');
     const payload = { ...form };
     if (!payload.password) delete payload.password;
+    if (!payload.locationId) delete payload.locationId;
     try {
       if (editingUser) await updateUser(token, editingUser.id, payload);
       else await createUser(token, payload);

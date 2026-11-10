@@ -248,6 +248,13 @@ describe('users and roles endpoints', () => {
   it('rejects invalid input, unauthenticated access, and non-admin users', async () => {
     const missingAuth = await request(app).get('/api/users');
     const invalid = await request(app).post('/api/users').set(auth).send({ name: 'x' });
+    const emptyLocation = await request(app).post('/api/users').set(auth).send({
+      name: 'Regular User',
+      email: 'regular@example.test',
+      password: 'long-password',
+      roleId,
+      locationId: '', // Empty string should be accepted and removed
+    });
     User.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue({
       ...admin, roleId: { name: 'Inventory Manager', permissions: ['*'] },
     }) });
@@ -255,7 +262,8 @@ describe('users and roles endpoints', () => {
 
     expect(missingAuth.status).toBe(401);
     expect(invalid.status).toBe(400);
-    expect(User.create).not.toHaveBeenCalled();
+    expect(emptyLocation.status).toBe(201);
+    expect(User.create).toHaveBeenCalledWith(expect.not.objectContaining({ locationId: '' }));
     expect(forbidden.status).toBe(403);
   });
 
