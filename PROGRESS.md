@@ -669,3 +669,8 @@
 	- Files: `.github/workflows/ci.yml`.
 	- Decisions: run backend tests and frontend production build with Node.js 20 on pushes and pull requests targeting `main`; pass `secrets.MONGODB_URI_TEST` to the backend as `MONGODB_URI`; do not deploy.
 	- Validation: backend tests and frontend production build pass locally.
+
+- [x] Dashboard Header outlet switcher & location-based user assignment
+	- Files: frontend/src/components/common/header.jsx (outlet switcher dropdown, location fetching, conditional rendering for Super Admin), frontend/src/app/roles/users/page.jsx (location field for Cashier/Inventory Manager), frontend/src/services/admin.js (getLocations API call), frontend/src/app/globals.css (outlet switcher styles), backend/services/dashboardService.js (location filtering for getDashboard/lowStockAlerts), backend/services/roleDashboardService.js (location-aware dashboard routing), backend/controllers/usersController.js (add locationId/assignedLocation to response), backend/routes/locationRoutes.js (users:read permission), backend/server.js (mount locationRoutes), IMPLEMENTATION_OUTLET_SWITCHER.md, VERIFICATION_CHECKLIST.md, OUTLET_SWITCHER_USAGE_GUIDE.md, TASK_COMPLETION_SUMMARY.md.
+	- Decisions: Super Admin sees outlet switcher in header with all active outlets; non-admin users see read-only outlet badge; location field required for Cashier and Inventory Manager roles; all dashboard metrics filtered server-side by user's assignedLocation; backward compatible (locationId optional), no database migrations needed, location enforced at API level.
+	- Validation: frontend production build passes (46 pages); backend tests pass (277 tests / 46 suites); all existing functionality preserved; comprehensive documentation provided.
