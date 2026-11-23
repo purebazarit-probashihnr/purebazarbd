@@ -775,3 +775,8 @@
 	- Files: Location-specific all-inventory stock API and access tests; vendor name/brand stock fields; dedicated Central Warehouse stock API; Outlet Inventory and Central Warehouse table updates.
 	- Decisions: All-inventory rows remain separate per active location and product; only Super Admin and `canViewAllLocations` users can request all locations. Central Warehouse reads resolve an active `CENTRAL` location server-side. Stock calculations and movement records are unchanged; no database migration was run.
 	- Validation: Backend Jest passes (53 suites, 401 tests); frontend production build passes.
+
+- [x] Fix duplicate notifications
+	- Files: `backend/services/notificationService.js` and notification integration tests; `frontend/src/components/common/notification-bell.jsx`, `frontend/src/services/notification-state.cjs`, and its focused test.
+	- Decisions: Low-stock alerts are identified by product and location; notification groups de-duplicate by type-qualified ID. The bell normalizes each replacement response, keeps the newest copy and unread state, and counts each ID once. Notifications are pending actions; there is no read/mark-as-read model or endpoint. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 402 tests); frontend production build passes; focused notification test passes. Full frontend tests retain one existing i18n assertion failure for three untranslated goods-receive strings.
