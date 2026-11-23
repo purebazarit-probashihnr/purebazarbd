@@ -71,8 +71,10 @@ const adminApproval = [authMiddleware, authorizeMiddleware({ roles: ['Super Admi
 router.get('/stock', [...read, enforceLocationScope.forStockRead], [
   query('warehouseId').isMongoId().withMessage('A valid warehouse ID is required'),
 ], validateRequest, stockController.getWarehouseStock);
+router.get('/stock/central-warehouse', [...read, enforceLocationScope.forStockRead], stockController.getCentralWarehouseStock);
 router.get('/inventory/outlet-products', [...read, enforceLocationScope.forStockRead], [
   query('warehouseId').optional().isMongoId().withMessage('A valid warehouse or outlet ID is required'),
+  query('allLocations').optional().isBoolean().withMessage('allLocations must be true or false'),
 ], validateRequest, stockController.getOutletProducts);
 router.get('/stock-adjustments', [...read, enforceLocationScope], [
   query('selectedOutletId').optional({ values: 'falsy' }).isMongoId()

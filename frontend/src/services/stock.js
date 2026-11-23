@@ -28,9 +28,10 @@ export const getWarehouseStock = (token, warehouseId) => api.get('/stock', {
   ...authConfig(token),
   params: { warehouseId },
 });
-export const getOutletProducts = (token, warehouseId) => api.get('/inventory/outlet-products', {
+export const getCentralWarehouseStock = (token) => api.get('/stock/central-warehouse', authConfig(token));
+export const getOutletProducts = (token, warehouseId, allLocations = false) => api.get('/inventory/outlet-products', {
   ...authConfig(token),
-  params: { warehouseId },
+  params: allLocations ? { allLocations: true } : { warehouseId },
 });
 export const getStockAdjustments = (token, params) => api.get('/stock-adjustments', {
   ...authConfig(token),

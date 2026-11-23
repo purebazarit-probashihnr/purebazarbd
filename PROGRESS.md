@@ -770,3 +770,8 @@
 	- Files: Added scoped and audited receipt reprints from bill rows and bill details; shared POS invoice layout and stored-order receipt builder; thermal monochrome static logo with sidebar-logo fallback.
 	- Decisions: Receipts use saved order totals and payment/line snapshots, mark all history opens `COPY - Reprint`, and audit actor, timestamp, and order. The service worker already precaches `/logo.png` for offline fallback. No database migration was run.
 	- Validation: Backend Jest passes (53 suites, 392 tests); receipt builder tests pass (4/4); frontend production build passes. Full frontend tests pass 43/44; the remaining existing i18n assertion reports nine unrelated untranslated strings.
+
+- [x] All inventory view and vendor columns
+	- Files: Location-specific all-inventory stock API and access tests; vendor name/brand stock fields; dedicated Central Warehouse stock API; Outlet Inventory and Central Warehouse table updates.
+	- Decisions: All-inventory rows remain separate per active location and product; only Super Admin and `canViewAllLocations` users can request all locations. Central Warehouse reads resolve an active `CENTRAL` location server-side. Stock calculations and movement records are unchanged; no database migration was run.
+	- Validation: Backend Jest passes (53 suites, 401 tests); frontend production build passes.

@@ -5,7 +5,7 @@ const request = require('supertest');
 
 jest.mock('../models', () => ({
   AuditLog: { create: jest.fn() },
-  Location: { find: jest.fn(), findById: jest.fn() },
+  Location: { find: jest.fn(), findById: jest.fn(), findOne: jest.fn() },
   Product: { find: jest.fn() },
   Settings: { findOne: jest.fn() },
   StockAdjustment: { create: jest.fn(), find: jest.fn(), findById: jest.fn() },
@@ -13,10 +13,11 @@ jest.mock('../models', () => ({
   StockMovement: { aggregate: jest.fn(), create: jest.fn() },
   Unit: { find: jest.fn() },
   User: { findById: jest.fn() },
+  Vendor: { find: jest.fn() },
 }));
 
 const {
-  AuditLog, Location, Product, Settings, StockAdjustment, StockCount, StockMovement, Unit, User,
+  AuditLog, Location, Product, Settings, StockAdjustment, StockCount, StockMovement, Unit, User, Vendor,
 } = require('../models');
 const stockRoutes = require('../routes/stockRoutes');
 const errorMiddleware = require('../middlewares/errorMiddleware');
@@ -31,6 +32,9 @@ const ids = {
   manager: '65b000000000000000000002',
   admin: '65b000000000000000000003',
   product: '65b000000000000000000004',
+  vendorProduct: '65b000000000000000000008',
+  vendor: '65b000000000000000000009',
+  companyProduct: '65b000000000000000000010',
 };
 const locations = new Map([
   [ids.warehouse, { _id: new mongoose.Types.ObjectId(ids.warehouse), type: 'CENTRAL', name: 'Central Warehouse', isActive: true }],
@@ -129,6 +133,7 @@ describe('stock adjustment and count API', () => {
       })),
     });
     Location.findById.mockImplementation((id) => query(locations.get(id.toString()) || null));
+    Location.findOne.mockImplementation(() => query(locations.get(ids.warehouse) || null));
     Product.find.mockImplementation((filter = {}) => query(
       filter._id?.$in
         ? [product].filter(({ _id }) => filter._id.$in.some((id) => id.toString() === _id.toString()))
@@ -141,11 +146,31 @@ describe('stock adjustment and count API', () => {
         }]),
       })),
     });
+    Vendor.find.mockReturnValue(query([]));
     Settings.findOne.mockReturnValue(query({ stockAdjustmentApprovalLimit: 100 }));
     AuditLog.create.mockImplementation(async (logs) => { auditLogs.push(...logs); return logs; });
     StockMovement.aggregate.mockImplementation((pipeline) => {
       const filter = pipeline[0].$match;
       if (!filter.productId) {
+        if (Array.isArray(filter.warehouseId?.$in)) {
+          const allowedLocations = filter.warehouseId.$in.map((id) => id.toString());
+          const stockByLocationAndProduct = new Map();
+          movements.filter((movement) => allowedLocations.includes(movement.warehouseId.toString()))
+            .forEach((movement) => {
+              const key = `${movement.warehouseId.toString()}|${movement.productId.toString()}`;
+              stockByLocationAndProduct.set(key, (stockByLocationAndProduct.get(key) || 0) + movement.quantity);
+            });
+          return [...stockByLocationAndProduct].map(([key, quantity]) => {
+            const [warehouseId, productId] = key.split('|');
+            return {
+              _id: {
+                warehouseId: new mongoose.Types.ObjectId(warehouseId),
+                productId: new mongoose.Types.ObjectId(productId),
+              },
+              quantity,
+            };
+          });
+        }
         const stock = new Map();
         movements.filter((movement) => movement.warehouseId.toString() === filter.warehouseId.toString())
           .forEach((movement) => {
@@ -309,6 +334,134 @@ describe('stock adjustment and count API', () => {
     expect(stockView.body.stock).toMatchObject([{ quantity: 90 }]);
     expect(central.status).toBe(200);
     expect(central.body.products).toMatchObject([{ productId: ids.product, stock: 0 }]);
+  });
+
+  it('returns each product separately for every active location with correct vendor details', async () => {
+    const vendorProduct = {
+      ...product,
+      _id: new mongoose.Types.ObjectId(ids.vendorProduct),
+      ownerType: 'VENDOR',
+      vendorId: new mongoose.Types.ObjectId(ids.vendor),
+    };
+    const companyProduct = {
+      ...product,
+      _id: new mongoose.Types.ObjectId(ids.companyProduct),
+      name: 'Company Product',
+      ownerType: 'COMPANY',
+      vendorId: undefined,
+    };
+    user.roleId.canViewAllLocations = true;
+    Location.find.mockReturnValue(query([...locations.values()]));
+    Product.find.mockReturnValue(query([vendorProduct, companyProduct]));
+    Vendor.find.mockReturnValue(query([{
+      _id: new mongoose.Types.ObjectId(ids.vendor),
+      name: 'Md. Rafiqul Islam',
+      shopName: 'Rafiqul Traders',
+    }]));
+    StockMovement.aggregate.mockResolvedValue([
+      {
+        _id: {
+          productId: new mongoose.Types.ObjectId(ids.vendorProduct),
+          warehouseId: new mongoose.Types.ObjectId(ids.warehouse),
+        },
+        quantity: 11,
+      },
+      {
+        _id: {
+          productId: new mongoose.Types.ObjectId(ids.vendorProduct),
+          warehouseId: new mongoose.Types.ObjectId(ids.outlet),
+        },
+        quantity: 4,
+      },
+    ]);
+
+    const response = await request(app).get('/api/inventory/outlet-products')
+      .set(auth()).query({ allLocations: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body.allLocations).toBe(true);
+    expect(response.body.products).toHaveLength(6);
+    expect(response.body.products).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        productId: ids.vendorProduct,
+        locationId: ids.warehouse,
+        locationName: 'Central Warehouse',
+        stock: 11,
+        vendorName: 'Md. Rafiqul Islam',
+        vendorBrand: 'Rafiqul Traders',
+      }),
+      expect.objectContaining({
+        productId: ids.vendorProduct,
+        locationId: ids.outlet,
+        stock: 4,
+      }),
+      expect.objectContaining({
+        productId: ids.companyProduct,
+        vendorName: 'Company',
+        vendorBrand: '-',
+      }),
+    ]));
+    user.roleId.name = 'Super Admin';
+    user.roleId.permissions = ['*'];
+    const adminResponse = await request(app).get('/api/inventory/outlet-products')
+      .set(auth()).query({ allLocations: true });
+    expect(adminResponse.status).toBe(200);
+  });
+
+  it('refuses all-location inventory requests from a location-locked user', async () => {
+    const response = await request(app).get('/api/inventory/outlet-products')
+      .set(auth()).query({ allLocations: true });
+
+    expect(response.status).toBe(403);
+    expect(response.body.message).toMatch(/all locations/i);
+  });
+
+  it('returns only the active Central Warehouse from the dedicated warehouse stock API', async () => {
+    user.roleId.name = 'Super Admin';
+    user.roleId.permissions = ['*'];
+    Product.find.mockReturnValue(query([
+      {
+        ...product,
+        _id: new mongoose.Types.ObjectId(ids.vendorProduct),
+        ownerType: 'VENDOR',
+        vendorId: new mongoose.Types.ObjectId(ids.vendor),
+      },
+      {
+        ...product,
+        _id: new mongoose.Types.ObjectId(ids.companyProduct),
+        ownerType: 'COMPANY',
+        vendorId: undefined,
+      },
+    ]));
+    Vendor.find.mockReturnValue(query([{
+      _id: new mongoose.Types.ObjectId(ids.vendor),
+      name: 'Md. Rafiqul Islam',
+      shopName: 'Rafiqul Traders',
+    }]));
+    StockMovement.aggregate.mockResolvedValue([
+      { _id: new mongoose.Types.ObjectId(ids.vendorProduct), quantity: 11 },
+      { _id: new mongoose.Types.ObjectId(ids.companyProduct), quantity: 8 },
+    ]);
+
+    const response = await request(app).get('/api/stock/central-warehouse').set(auth());
+
+    expect(response.status).toBe(200);
+    expect(response.body.warehouse).toEqual({ id: ids.warehouse, name: 'Central Warehouse' });
+    expect(StockMovement.aggregate.mock.calls[0][0][0].$match.warehouseId.toString()).toBe(ids.warehouse);
+    expect(response.body.stock).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        vendorName: 'Md. Rafiqul Islam', vendorBrand: 'Rafiqul Traders', quantity: 11,
+      }),
+      expect.objectContaining({ vendorName: 'Company', vendorBrand: '-', quantity: 8 }),
+    ]));
+    const selectedOutlet = await request(app).get('/api/stock/central-warehouse')
+      .set(auth()).query({ warehouseId: ids.outlet });
+    expect(selectedOutlet.status).toBe(403);
+
+    Location.findOne.mockReturnValue(query(null));
+    const missingWarehouse = await request(app).get('/api/stock/central-warehouse').set(auth());
+    expect(missingWarehouse.status).toBe(404);
+    expect(missingWarehouse.body.message).toMatch(/Central Warehouse was not found/i);
   });
 
   it('requires stock write permission to create or post any stock count', async () => {
