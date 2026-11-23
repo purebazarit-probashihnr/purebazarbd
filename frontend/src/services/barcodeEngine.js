@@ -59,10 +59,28 @@ function isValidRetailBarcode(value) {
 function retailBarcodeWarning(value) {
   const text = String(value || '').trim();
   if (!text || text.startsWith('PB')) return '';
-  if (/^\d{8}$/.test(text) && !isValidEan8(text)) return 'EAN-8 check digit is invalid.';
-  if (/^\d{12}$/.test(text) && !isValidUpcA(text)) return 'UPC-A check digit is invalid.';
-  if (/^\d{13}$/.test(text) && !isValidEan13(text)) return 'EAN-13 check digit is invalid.';
-  return '';
+  const warnings = [];
+  if (text.startsWith('29')) {
+    warnings.push('This code starts with 29, a range reserved for in-store codes; check that it is the manufacturer\'s code');
+  }
+  if (/^\d{8}$/.test(text) && !isValidEan8(text)) warnings.push('EAN-8 check digit is invalid.');
+  if (/^\d{12}$/.test(text) && !isValidUpcA(text)) warnings.push('UPC-A check digit is invalid.');
+  if (/^\d{13}$/.test(text) && !isValidEan13(text)) warnings.push('EAN-13 check digit is invalid.');
+  return warnings.join(' ');
+}
+
+function findInternalBarcodeConflict(products, productGroupId, productId) {
+  return (products || []).find((product) => {
+    if (product.id === productId) return false;
+    const internal = product.barcodeSource === 'internal'
+      || (!product.barcodeSource && String(product.barcode || '').startsWith('PB'));
+    const existingGroupId = product.productGroupId || product.id;
+    return internal && (!productGroupId || existingGroupId !== productGroupId);
+  }) || null;
+}
+
+function barcodeSourceForEntry(value) {
+  return String(value || '').trim() ? 'manufacturer' : 'internal';
 }
 
 function getEan8Modules(barcode) {
@@ -242,10 +260,12 @@ module.exports = {
   DEFAULT_LABEL_SIZE,
   LABEL_SIZES,
   buildBarcodeLabels,
+  barcodeSourceForEntry,
   getCode128Modules,
   getBarcodeModules,
   getEan8Modules,
   getEan13Modules,
+  findInternalBarcodeConflict,
   isValidEan8,
   isValidEan13,
   isValidRetailBarcode,

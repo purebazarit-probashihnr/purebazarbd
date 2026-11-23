@@ -1,15 +1,18 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ScanLine } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import CameraBarcodeScanner from '@/components/common/camera-barcode-scanner';
 import useBarcodeScanner from '@/hooks/use-barcode-scanner';
 import { getProductBarcodeMatches } from '@/services/inventory';
-import { retailBarcodeWarning } from '@/services/barcodeEngine';
+import {
+  barcodeSourceForEntry, findInternalBarcodeConflict, retailBarcodeWarning,
+} from '@/services/barcodeEngine';
 
 export default function ProductBarcodeFields({
-  barcode, barcodes, barcodeSource, onChange, token, productId, onOpenExisting, onAddVendor,
+  barcode, barcodes, onChange, token, productId, productGroupId,
+  onConflictChange, onOpenExisting, onAddVendor,
 }) {
   const [matches, setMatches] = useState([]);
   const [lookupError, setLookupError] = useState('');
@@ -18,22 +21,54 @@ export default function ProductBarcodeFields({
     .map((value) => retailBarcodeWarning(value))
     .filter(Boolean);
 
+  useEffect(() => {
+    const values = [...new Set([
+      barcode,
+      ...String(barcodes || '').split(/\r?\n|,/),
+    ].map((value) => String(value || '').trim()).filter(Boolean))];
+    setMatches([]);
+    setLookupError('');
+    onConflictChange?.(false);
+    if (!values.length) return undefined;
+    let active = true;
+    const timeout = setTimeout(async () => {
+      try {
+        const responses = await Promise.all(values.map((value) => getProductBarcodeMatches(token, value)));
+        if (active) {
+          const products = responses.flatMap(({ data }) => data.products || []);
+          setMatches(products.filter((product, index) => (
+            product.id !== productId && products.findIndex((entry) => entry.id === product.id) === index
+          )));
+        }
+      } catch (error) {
+        if (active) {
+          setMatches([]);
+          setLookupError(error.response?.data?.message || 'Unable to check whether this barcode is already used.');
+        }
+      }
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [barcode, barcodes, onConflictChange, productId, token]);
+
+  const internalConflict = findInternalBarcodeConflict(matches, productGroupId || productId, productId);
+
+  useEffect(() => {
+    onConflictChange?.(Boolean(internalConflict));
+  }, [internalConflict, onConflictChange]);
+
   const handleScan = useCallback(async (value) => {
     const scanned = String(value || '').trim();
     if (!scanned) return;
     onChange({
       barcode: scanned,
-      barcodeSource: scanned.startsWith('PB') ? 'internal' : 'manufacturer',
+      barcodeSource: barcodeSourceForEntry(scanned),
     });
+    onConflictChange?.(false);
     setLookupError('');
-    try {
-      const { data } = await getProductBarcodeMatches(token, scanned);
-      setMatches((data.products || []).filter((product) => product.id !== productId));
-    } catch (error) {
-      setMatches([]);
-      setLookupError(error.response?.data?.message || 'Unable to check whether this barcode is already used.');
-    }
-  }, [onChange, productId, token]);
+  }, [onChange, onConflictChange]);
   const scanner = useBarcodeScanner(handleScan);
 
   return (
@@ -48,8 +83,9 @@ export default function ProductBarcodeFields({
             const value = event.target.value;
             onChange({
               barcode: value,
-              barcodeSource: value ? (value.startsWith('PB') ? 'internal' : 'manufacturer') : 'internal',
+              barcodeSource: barcodeSourceForEntry(value),
             });
+            onConflictChange?.(false);
             setMatches([]);
             setLookupError('');
           }}
@@ -74,9 +110,7 @@ export default function ProductBarcodeFields({
           <ScanLine size={16} /> Scan
         </Button>
       </div>
-      {/* <p className="hidden text-xs text-slate-500 lg:block">On desktop, click Scan and use a USB scanner. On phones and tablets, use the camera button.</p>
-      {barcodeSource && <p className="text-xs text-slate-500">Barcode source: {barcodeSource}</p>}
-      {warning && <p role="status" className="text-xs text-amber-800">{warning} You can still save this code.</p>} */}
+      {warning && <p role="status" className="text-xs text-amber-800">{warning} You can still save this code.</p>}
       {/* <label className="block text-sm font-medium text-slate-700" htmlFor="extra-barcodes">Extra barcodes</label>
       <textarea
         id="extra-barcodes"
@@ -89,7 +123,13 @@ export default function ProductBarcodeFields({
         <p key={`${index}-${message}`} role="status" className="text-xs text-amber-800">{message} This extra code can still be saved.</p>
       ))}
       {lookupError && <p role="alert" className="text-xs text-red-700">{lookupError}</p>}
+      {internalConflict && (
+        <p role="alert" className="text-xs text-red-700">
+          This code is already the in-store code of {internalConflict.name}.
+        </p>
+      )}
       {matches.map((product) => (
+        internalConflict ? null : (
         <div key={product.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50 p-2 text-sm">
           <span>{product.name} · {product.vendorName || 'Company product'}</span>
           <span className="flex gap-2">
@@ -97,6 +137,7 @@ export default function ProductBarcodeFields({
             {onAddVendor && <Button type="button" size="sm" onClick={() => onAddVendor(product.id)}>Add for another vendor</Button>}
           </span>
         </div>
+        )
       ))}
     </div>
   );

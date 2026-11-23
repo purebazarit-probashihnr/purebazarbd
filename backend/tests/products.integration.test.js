@@ -7,6 +7,7 @@ jest.mock('../models', () => ({
   Brand: { exists: jest.fn() },
   Category: { exists: jest.fn() },
   PriceHistory: { create: jest.fn() },
+  ProductBarcodeCounter: { findOneAndUpdate: jest.fn() },
   Product: { create: jest.fn(), exists: jest.fn(), find: jest.fn(), findById: jest.fn() },
   Settings: { findOne: jest.fn() },
   Unit: { exists: jest.fn(), find: jest.fn() },
@@ -15,7 +16,7 @@ jest.mock('../models', () => ({
 }));
 
 const {
-  AuditLog, Brand, Category, PriceHistory, Product, Settings, Unit, User, Vendor,
+  AuditLog, Brand, Category, PriceHistory, Product, ProductBarcodeCounter, Settings, Unit, User, Vendor,
 } = require('../models');
 const productRoutes = require('../routes/productRoutes');
 const errorMiddleware = require('../middlewares/errorMiddleware');
@@ -80,10 +81,12 @@ describe('product endpoints', () => {
     Brand.exists.mockResolvedValue(true);
     Unit.exists.mockResolvedValue(true);
     Vendor.exists.mockResolvedValue(true);
+    Product.exists.mockResolvedValue(false);
+    ProductBarcodeCounter.findOneAndUpdate.mockResolvedValue({ sequence: 1 });
     Vendor.find.mockReturnValue(chain([]));
     AuditLog.create.mockResolvedValue({});
     PriceHistory.create.mockResolvedValue({});
-    Product.find.mockReturnValue(chain([product]));
+    Product.find.mockImplementation((filter) => chain(filter ? [] : [product]));
     Unit.find.mockReturnValue({ select: () => ({ lean: () => Promise.resolve([{ _id: unitId, name: 'Box', abbreviation: 'Box' }]) }) });
   });
 
@@ -116,10 +119,7 @@ describe('product endpoints', () => {
       name: 'Rice', categoryId, unitId, ownerType: 'COMPANY', vendorPrice: 101, mrp: 100,
     });
     Product.create.mockImplementation(async (input) => ({
-      ...product,
-      ...input,
-      barcode: 'PB0123456789ABCDEF012345',
-      margin: input.mrp - input.vendorPrice,
+      ...product, ...input, margin: input.mrp - input.vendorPrice,
     }));
     const created = await request(app).post('/api/products').set(auth).send({
       name: 'Rice', categoryId, unitId, ownerType: 'COMPANY', vendorPrice: 95, mrp: 100,
@@ -130,13 +130,90 @@ describe('product endpoints', () => {
     expect(Product.create).toHaveBeenCalledTimes(1);
     expect(Product.create).toHaveBeenCalledWith(expect.objectContaining({
       ownerType: 'COMPANY', vendorPrice: 95, mrp: 100, sku: 'RICE-001', vatApplicable: true, vatRate: 5,
+      barcode: expect.stringMatching(/^29\d{11}$/), barcodeSource: 'internal',
     }));
     expect(created.status).toBe(201);
-    expect(created.body.product.barcode).toBeTruthy();
+    expect(created.body.product.barcode).toMatch(/^29\d{11}$/);
     expect(created.body.product.sku).toBe('RICE-001');
     expect(AuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
       action: 'CREATE', entity: 'Product',
     }));
+  });
+
+  it('blocks a manually entered internal code belonging to another product group', async () => {
+    const internalProduct = {
+      _id: '65b000000000000000000010',
+      name: 'Existing Rice',
+      barcode: '2900000000013',
+      barcodeSource: 'internal',
+      productGroupId: '65b000000000000000000011',
+    };
+    Product.find.mockReturnValueOnce(chain([internalProduct]));
+    const response = await request(app).post('/api/products').set(auth).send({
+      name: 'Rice copy', categoryId, unitId, ownerType: 'COMPANY', vendorPrice: 95, mrp: 100,
+      barcode: internalProduct.barcode, barcodeSource: 'internal',
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.message).toBe('This code is already the in-store code of Existing Rice');
+    expect(Product.create).not.toHaveBeenCalled();
+  });
+
+  it('stores manually entered codes starting with 29 as manufacturer codes', async () => {
+    Product.create.mockImplementation(async (input) => ({ ...product, ...input }));
+    const response = await request(app).post('/api/products').set(auth).send({
+      name: 'Manual item', categoryId, unitId, ownerType: 'COMPANY', vendorPrice: 95, mrp: 100,
+      barcode: '2901234567890', barcodeSource: 'internal',
+    });
+
+    expect(response.status).toBe(201);
+    expect(Product.create).toHaveBeenCalledWith(expect.objectContaining({
+      barcode: '2901234567890',
+      barcodeSource: 'manufacturer',
+    }));
+  });
+
+  it('blocks an internal-code collision when updating extra barcodes', async () => {
+    const current = {
+      ...product,
+      productGroupId: productId,
+      barcodes: [],
+      set: jest.fn(),
+      save: jest.fn(),
+    };
+    Product.findById.mockReturnValue(current);
+    Product.find.mockReturnValueOnce(chain([{
+      _id: '65b000000000000000000010',
+      name: 'Existing Rice',
+      barcode: '2900000000013',
+      barcodeSource: 'internal',
+      productGroupId: '65b000000000000000000011',
+    }]));
+    const response = await request(app).put(`/api/products/${productId}`).set(auth)
+      .send({ barcodes: ['2900000000013'] });
+
+    expect(response.status).toBe(409);
+    expect(response.body.message).toMatch(/in-store code of Existing Rice/);
+    expect(current.set).not.toHaveBeenCalled();
+  });
+
+  it('keeps manufacturer matches available to the vendor-copy flow', async () => {
+    const manufacturerProduct = {
+      ...product,
+      barcode: '4006381333931',
+      barcodeSource: 'manufacturer',
+      productGroupId: productId,
+      vendorId: '65b000000000000000000010',
+    };
+    Product.find.mockReturnValueOnce(chain([manufacturerProduct]));
+    const response = await request(app).get('/api/products/barcodes/4006381333931').set(auth);
+
+    expect(response.status).toBe(200);
+    expect(response.body.products[0]).toMatchObject({
+      name: 'Rice',
+      barcodeSource: 'manufacturer',
+      productGroupId: productId,
+    });
   });
 
   it('ignores unitValue when creating a product', async () => {

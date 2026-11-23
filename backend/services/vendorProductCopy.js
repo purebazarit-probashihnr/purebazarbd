@@ -1,7 +1,9 @@
 const {
   AuditLog, PriceHistory, Product, Vendor,
 } = require('../models');
-const { normalizeBarcodes } = require('../utils/productBarcodes');
+const {
+  barcodeFilter, findInternalBarcodeConflict, isInternalBarcodeProduct, normalizeBarcodes,
+} = require('../utils/productBarcodes');
 
 function statusError(message, status) {
   const error = new Error(message);
@@ -45,11 +47,19 @@ async function createVendorCopy({
   if (await Product.exists({
     ownerType: 'VENDOR',
     vendorId: vendor._id,
-    barcodeKeys: { $in: barcodeKeys },
+    ...barcodeFilter(barcodeKeys),
   })) {
     throw statusError('This vendor already has a product with one of these barcodes', 409);
   }
   const productGroupId = source.productGroupId || source._id;
+  const internalConflict = await findInternalBarcodeConflict(Product, barcodeKeys, {
+    productGroupId: productGroupId.toString(),
+  });
+  if (internalConflict) {
+    throw statusError(`This code is already the in-store code of ${internalConflict.name}`, 409);
+  }
+  const barcodeSource = source.barcodeSource
+    || (isInternalBarcodeProduct(source) ? 'internal' : 'manufacturer');
   if (!source.productGroupId) {
     source.productGroupId = productGroupId;
     await source.save();
@@ -74,7 +84,7 @@ async function createVendorCopy({
       ...(source.vatRate !== undefined ? { vatRate: source.vatRate } : {}),
       barcode: source.barcode,
       barcodes: source.barcodes || [],
-      barcodeSource: source.barcodeSource,
+      barcodeSource,
       listedOnline: source.listedOnline,
     });
   } catch (error) {

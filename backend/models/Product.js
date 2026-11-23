@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { calculateSubUnitPrice, effectiveSubUnitPrice } = require('../utils/piecePricing');
-const { generateInternalBarcode, normalizeBarcodes } = require('../utils/productBarcodes');
+const ProductBarcodeCounter = require('./ProductBarcodeCounter');
+const { generateUniqueInternalBarcode, normalizeBarcodes } = require('../utils/productBarcodes');
 
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
@@ -27,9 +28,9 @@ const productSchema = new mongoose.Schema({
   listedOnline: { type: Boolean, default: false },
 }, { timestamps: true });
 
-productSchema.pre('validate', function calculateMargin() {
+productSchema.pre('validate', async function calculateMargin() {
   if (!this.barcode) {
-    this.barcode = generateInternalBarcode();
+    this.barcode = await generateUniqueInternalBarcode(this.constructor, ProductBarcodeCounter);
     this.barcodeSource = 'internal';
   } else if (!this.barcodeSource) {
     this.barcodeSource = this.barcode.startsWith('PB') ? 'internal' : 'manufacturer';

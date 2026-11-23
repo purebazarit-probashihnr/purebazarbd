@@ -1,7 +1,7 @@
 jest.mock('../models', () => ({
   AuditLog: { create: jest.fn() },
   PriceHistory: { create: jest.fn() },
-  Product: { create: jest.fn(), exists: jest.fn(), findById: jest.fn() },
+  Product: { create: jest.fn(), exists: jest.fn(), find: jest.fn(), findById: jest.fn() },
   Vendor: { findById: jest.fn() },
 }));
 
@@ -11,8 +11,18 @@ const {
 const { createVendorCopy } = require('../services/vendorProductCopy');
 
 describe('vendor product copy', () => {
+  function productQuery(products = []) {
+    const query = {
+      select: jest.fn(() => query),
+      lean: jest.fn().mockResolvedValue(products),
+    };
+    return query;
+  }
+
   beforeEach(() => {
     jest.clearAllMocks();
+    Product.exists.mockResolvedValue(false);
+    Product.find.mockReturnValue(productQuery());
   });
 
   it('copies product details and links the vendor copy to the existing group', async () => {
@@ -117,6 +127,41 @@ describe('vendor product copy', () => {
       mrp: 100,
       actorId: 'actor',
     })).rejects.toMatchObject({ status: 409 });
+    expect(Product.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to copy an internal code into a different product group', async () => {
+    const source = {
+      _id: '65b000000000000000000021',
+      name: 'Tea',
+      ownerType: 'VENDOR',
+      vendorId: '65b000000000000000000022',
+      productGroupId: '65b000000000000000000023',
+      barcode: 'PB-TEA',
+      barcodes: [],
+      barcodeSource: 'internal',
+    };
+    const vendor = { _id: '65b000000000000000000024' };
+    Product.findById.mockResolvedValue(source);
+    Product.find.mockReturnValue(productQuery([{
+      _id: '65b000000000000000000025',
+      name: 'Other Tea',
+      productGroupId: '65b000000000000000000026',
+      barcode: 'PB-TEA',
+      barcodeSource: 'internal',
+    }]));
+    Vendor.findById.mockReturnValue({ lean: jest.fn().mockResolvedValue(vendor) });
+
+    await expect(createVendorCopy({
+      sourceProductId: source._id,
+      vendorId: vendor._id,
+      vendorPrice: 70,
+      mrp: 100,
+      actorId: 'actor',
+    })).rejects.toMatchObject({
+      status: 409,
+      message: 'This code is already the in-store code of Other Tea',
+    });
     expect(Product.create).not.toHaveBeenCalled();
   });
 });

@@ -39,6 +39,7 @@ export default function ProductEditModal({
   const [catalogErrors, setCatalogErrors] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [barcodeConflict, setBarcodeConflict] = useState(false);
   const permissionsKey = permissions.join('|');
   const vendorPrice = Number(form.vendorPrice);
   const mrp = Number(form.mrp);
@@ -50,6 +51,7 @@ export default function ProductEditModal({
     if (!open || !product) return;
     setForm(formFor(product));
     setError('');
+    setBarcodeConflict(false);
     setCatalogErrors([]);
   }, [open, product]);
 
@@ -147,8 +149,10 @@ export default function ProductEditModal({
           barcodes={form.barcodes}
           barcodeSource={form.barcodeSource}
           onChange={(changes) => setForm((current) => ({ ...current, ...changes }))}
+          onConflictChange={setBarcodeConflict}
           token={token}
           productId={product?.id}
+          productGroupId={idOf(product?.productGroupId)}
           onOpenExisting={onOpenExisting}
           onAddVendor={onAddVendor}
         />
@@ -158,7 +162,7 @@ export default function ProductEditModal({
         {error && <p role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={saving || catalogLoading || !hasPrices || invalidMrp}>{saving ? 'Saving...' : 'Save changes'}</Button>
+          <Button type="submit" disabled={saving || catalogLoading || !hasPrices || invalidMrp || barcodeConflict}>{saving ? 'Saving...' : 'Save changes'}</Button>
         </div>
       </form>
     </Modal>

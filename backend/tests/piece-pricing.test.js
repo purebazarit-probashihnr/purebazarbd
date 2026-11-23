@@ -22,7 +22,7 @@ describe('margin-safe piece pricing', () => {
   it('stores the piece price on the product and rejects overrides below it', async () => {
     const base = {
       name: 'Box', categoryId: '507f1f77bcf86cd799439011', unitId: '507f1f77bcf86cd799439012',
-      ownerType: 'COMPANY', vendorPrice: 800, mrp: 1000, unitsPerPackage: 30,
+      ownerType: 'COMPANY', vendorPrice: 800, mrp: 1000, unitsPerPackage: 30, barcode: 'PIECE-TEST',
     };
     const product = new Product(base);
     await product.validate();

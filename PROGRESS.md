@@ -780,3 +780,8 @@
 	- Files: `backend/services/notificationService.js` and notification integration tests; `frontend/src/components/common/notification-bell.jsx`, `frontend/src/services/notification-state.cjs`, and its focused test.
 	- Decisions: Low-stock alerts are identified by product and location; notification groups de-duplicate by type-qualified ID. The bell normalizes each replacement response, keeps the newest copy and unread state, and counts each ID once. Notifications are pending actions; there is no read/mark-as-read model or endpoint. No database migration was run.
 	- Validation: Backend Jest passes (53 suites, 402 tests); frontend production build passes; focused notification test passes. Full frontend tests retain one existing i18n assertion failure for three untranslated goods-receive strings.
+
+- [x] Collision-safe internal product barcodes
+	- Files: `backend/models/ProductBarcodeCounter.js`, product barcode generation and collision helpers, product create/update and vendor-copy validation, barcode form source/warning/conflict handling, and focused backend/frontend tests.
+	- Decisions: New blank codes use an atomic 10-digit serial in the reserved `29` range with an EAN-13 check digit; lookup checks primary, extra, and indexed codes across all owners, treating UPC-A and leading-zero EAN-13 as equivalent. Typed/scanned codes remain manufacturer codes; legacy PB fallback and the per-vendor unique index remain unchanged. No migration was run.
+	- Validation: Backend Jest passes (53 suites, 412 tests); frontend build passes; focused barcode tests pass (9/9). Full frontend tests retain one existing i18n assertion failure for three untranslated goods-receive strings.

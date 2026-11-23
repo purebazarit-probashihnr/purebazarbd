@@ -1,8 +1,11 @@
 const {
-  AuditLog, Brand, Category, PriceHistory, Product, Settings, Unit, Vendor,
+  AuditLog, Brand, Category, PriceHistory, Product, ProductBarcodeCounter, Settings, Unit, Vendor,
 } = require('../models');
 const { unitLabelMap, displayFields } = require('../utils/productDisplay');
 const { createVendorCopy } = require('../services/vendorProductCopy');
+const {
+  barcodeFilter, findInternalBarcodeConflict, generateUniqueInternalBarcode,
+} = require('../utils/productBarcodes');
 
 const editableFields = [
   'name', 'sku', 'categoryId', 'brandId', 'unitId', 'unitValue', 'ownerType', 'vendorId', 'barcode', 'barcodes', 'barcodeSource',
@@ -68,8 +71,9 @@ async function vendorNameMap(products) {
   return new Map(vendors.map((vendor) => [vendor._id.toString(), vendor.shopName || vendor.name]));
 }
 
-function barcodeFilter(value) {
-  return { $or: [{ barcode: value }, { barcodes: value }] };
+async function assertNoInternalBarcodeConflict(barcodes, options) {
+  const conflict = await findInternalBarcodeConflict(Product, barcodes, options);
+  if (conflict) throw statusError(`This code is already the in-store code of ${conflict.name}`, 409);
 }
 
 async function validateReferences(data) {
@@ -133,6 +137,10 @@ async function createProduct(req, res, next) {
   try {
     const input = pickInput(req.body, creationFields);
     await validateReferences(input);
+    const enteredBarcode = String(input.barcode || '').trim();
+    input.barcode = enteredBarcode || await generateUniqueInternalBarcode(Product, ProductBarcodeCounter);
+    input.barcodeSource = enteredBarcode ? 'manufacturer' : 'internal';
+    await assertNoInternalBarcodeConflict([input.barcode, ...(input.barcodes || [])]);
     const product = await Product.create(input);
     const after = productSnapshot(product);
     await AuditLog.create({
@@ -160,6 +168,28 @@ async function updateProduct(req, res, next) {
     const before = productSnapshot(product);
     const input = pickInput(req.body);
     if (!Object.keys(input).length) throw statusError('At least one product field must be supplied', 400);
+    const barcodeChanged = Object.prototype.hasOwnProperty.call(input, 'barcode')
+      && String(input.barcode || '').trim() !== String(product.barcode || '').trim();
+    if (barcodeChanged && !String(input.barcode || '').trim()) {
+      throw statusError('Barcode cannot be cleared; provide a replacement code', 400);
+    }
+    if (barcodeChanged) input.barcodeSource = 'manufacturer';
+    else delete input.barcodeSource;
+    if (!Object.keys(input).length) throw statusError('At least one product field must be supplied', 400);
+    const barcodesChanged = Object.prototype.hasOwnProperty.call(input, 'barcodes')
+      && JSON.stringify(input.barcodes || []) !== JSON.stringify(product.barcodes || []);
+    if (barcodeChanged || barcodesChanged) {
+      const nextBarcode = barcodeChanged ? input.barcode : product.barcode;
+      const nextBarcodes = Object.prototype.hasOwnProperty.call(input, 'barcodes')
+        ? input.barcodes : product.barcodes;
+      await assertNoInternalBarcodeConflict(
+        [nextBarcode, ...(nextBarcodes || [])],
+        {
+          productGroupId: (product.productGroupId || product._id).toString(),
+          excludeProductId: product._id,
+        },
+      );
+    }
     const changesPrice = ['vendorPrice', 'mrp'].some((field) => (
       Object.prototype.hasOwnProperty.call(input, field) && input[field] !== product[field]
     ));
@@ -214,6 +244,9 @@ async function findBarcodeMatches(req, res, next) {
         id: product._id.toString(),
         name: product.name,
         barcode: product.barcode,
+        barcodes: product.barcodes || [],
+        barcodeSource: product.barcodeSource,
+        productGroupId: (product.productGroupId || product._id).toString(),
         vendorId: product.vendorId?.toString() || null,
         vendorName: vendors.get(product.vendorId?.toString()) || null,
       })),

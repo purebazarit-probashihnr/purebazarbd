@@ -6,7 +6,8 @@ const require = createRequire(import.meta.url);
 const { getUnitOptions } = require('../src/services/barcodeUnits.js');
 const { addReceiveProductLine } = require('../src/services/goods-receive-utils.cjs');
 const {
-  buildBarcodeLabels, isValidEan8, isValidUpcA, retailBarcodeWarning,
+  barcodeSourceForEntry, buildBarcodeLabels, findInternalBarcodeConflict,
+  isValidEan8, isValidUpcA, retailBarcodeWarning,
 } = require('../src/services/barcodeEngine.js');
 
 const product = {
@@ -51,6 +52,25 @@ test('validates EAN-8 and UPC-A check digits without blocking label output', () 
   assert.equal(isValidUpcA('036000291452'), true);
   assert.match(retailBarcodeWarning('036000291453'), /UPC-A check digit is invalid/);
   assert.equal(buildBarcodeLabels([{ ...product, barcode: 'PB-0123ABCDE', price: 500 }]).labels[0].barcode, 'PB-0123ABCDE');
+});
+
+test('typed 29 codes remain manufacturer codes and show the reserved-range warning', () => {
+  assert.equal(barcodeSourceForEntry('2901234567890'), 'manufacturer');
+  assert.match(retailBarcodeWarning('2901234567890'), /range reserved for in-store codes/);
+  assert.match(retailBarcodeWarning('2901234567890'), /EAN-13 check digit is invalid/);
+  assert.equal(barcodeSourceForEntry(''), 'internal');
+});
+
+test('form lookup blocks another group internal code but leaves manufacturer matches available', () => {
+  const internal = {
+    id: 'p2', name: 'Existing Rice', productGroupId: 'group-2',
+    barcode: '2900000000013', barcodeSource: 'internal',
+  };
+  assert.equal(findInternalBarcodeConflict([internal], 'group-1'), internal);
+  assert.equal(findInternalBarcodeConflict([internal], 'group-2'), null);
+  assert.equal(findInternalBarcodeConflict([{
+    ...internal, barcodeSource: 'manufacturer',
+  }], 'group-1'), null);
 });
 
 test('adding a GRN vendor copy creates a line for that newly copied product', () => {

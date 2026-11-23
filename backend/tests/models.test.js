@@ -1,13 +1,25 @@
 const mongoose = require('mongoose');
 const models = require('../models');
+const { ean13CheckDigit } = require('../utils/productBarcodes');
 
 const objectId = () => new mongoose.Types.ObjectId();
 
 describe('Mongoose models', () => {
+  let sequence;
+
+  beforeEach(() => {
+    sequence = 0;
+    jest.spyOn(models.ProductBarcodeCounter, 'findOneAndUpdate')
+      .mockImplementation(async () => ({ sequence: ++sequence }));
+    jest.spyOn(models.Product, 'exists').mockResolvedValue(false);
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
   it('registers every requested model', () => {
     expect(Object.keys(models).sort()).toEqual([
       'AttendanceRecord', 'AuditLog', 'Brand', 'Category', 'DiscountLog', 'Employee', 'Expense', 'ExpenseCategory',
-      'GoodsReceive', 'Location', 'Order', 'PriceHistory', 'Product', 'Return', 'Role', 'RosterEntry', 'SalaryAdvance',
+      'GoodsReceive', 'Location', 'Order', 'PriceHistory', 'Product', 'ProductBarcodeCounter', 'Return', 'Role', 'RosterEntry', 'SalaryAdvance',
       'SalarySheet', 'Settings', 'Shareholder', 'Shift', 'StockAdjustment', 'StockCount',
       'StockMovement', 'StockTransfer', 'Unit', 'User', 'Vendor', 'VendorCodeCounter', 'VendorLedger',
       'VendorRegistration', 'VendorStatement', 'WalletAuditLog', 'WalletLog', 'WalletReconciliation', 'WorkShift',
@@ -62,7 +74,8 @@ describe('Mongoose models', () => {
 
     await product.validate();
 
-    expect(product.barcode).toMatch(/^PB[A-F0-9]{16}$/);
+    expect(product.barcode).toMatch(/^29\d{11}$/);
+    expect(product.barcode[12]).toBe(ean13CheckDigit(product.barcode.slice(0, 12)));
     expect(product.barcodeSource).toBe('internal');
     expect(product.productGroupId).toEqual(product._id);
     expect(models.Product.schema.indexes().some(([fields, options]) => (

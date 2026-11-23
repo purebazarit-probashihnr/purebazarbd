@@ -5,6 +5,7 @@ module.exports = {
   Brand: require('./Brand'),
   Unit: require('./Unit'),
   Product: require('./Product'),
+  ProductBarcodeCounter: require('./ProductBarcodeCounter'),
   PriceHistory: require('./PriceHistory'),
   StockMovement: require('./StockMovement'),
   GoodsReceive: require('./GoodsReceive'),

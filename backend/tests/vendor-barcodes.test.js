@@ -1,12 +1,18 @@
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
-const { barcodeMatches, INTERNAL_BARCODE_PREFIX } = require('../utils/productBarcodes');
+const ProductBarcodeCounter = require('../models/ProductBarcodeCounter');
+const {
+  barcodeFilter, barcodeLookupValues, barcodeMatches, ean13CheckDigit,
+  findInternalBarcodeConflict, generateUniqueInternalBarcode, isInternalBarcodeProduct,
+} = require('../utils/productBarcodes');
 const { fifoStock, sortByFifo } = require('../services/posCatalogService');
 const {
   findBarcodeConflicts, isOldGlobalBarcodeIndex, makeIndexPlan,
 } = require('../scripts/migrateVendorProductBarcodes');
 
 describe('vendor barcode behavior', () => {
+  afterEach(() => jest.restoreAllMocks());
+
   it('allows the same code across vendors but identifies duplicates for the same vendor', () => {
     const products = [
       { _id: 'p1', ownerType: 'VENDOR', vendorId: 'v1', barcode: '4006381333931' },
@@ -25,6 +31,8 @@ describe('vendor barcode behavior', () => {
   });
 
   it('generates a reserved internal barcode for an empty barcode field', async () => {
+    jest.spyOn(ProductBarcodeCounter, 'findOneAndUpdate').mockResolvedValue({ sequence: 1 });
+    jest.spyOn(Product, 'exists').mockResolvedValue(false);
     const product = new Product({
       name: 'Test item',
       categoryId: new mongoose.Types.ObjectId(),
@@ -35,12 +43,102 @@ describe('vendor barcode behavior', () => {
       barcode: '',
     });
     await product.validate();
-    expect(product.barcode.startsWith(INTERNAL_BARCODE_PREFIX)).toBe(true);
+    expect(product.barcode).toMatch(/^29\d{11}$/);
+    expect(product.barcode[12]).toBe(ean13CheckDigit(product.barcode.slice(0, 12)));
     expect(product.barcodeSource).toBe('internal');
+  });
+
+  it('allocates distinct valid EAN-13 codes for parallel product creations', async () => {
+    let sequence = 0;
+    const Counter = {
+      findOneAndUpdate: jest.fn(async () => ({ sequence: ++sequence })),
+    };
+    const ProductModel = { exists: jest.fn().mockResolvedValue(false) };
+    const barcodes = await Promise.all(Array.from({ length: 20 }, () => (
+      generateUniqueInternalBarcode(ProductModel, Counter)
+    )));
+
+    expect(new Set(barcodes).size).toBe(20);
+    barcodes.forEach((barcode) => {
+      expect(barcode).toMatch(/^29\d{11}$/);
+      expect(barcode[12]).toBe(ean13CheckDigit(barcode.slice(0, 12)));
+    });
+  });
+
+  it('skips codes already present in primary, extra, or indexed barcodes', async () => {
+    const occupiedBarcode = '2900000000018';
+    const occupiedCompanyCode = '2900000000025';
+    const occupiedKeysCode = '2900000000032';
+    const Counter = {
+      findOneAndUpdate: jest.fn()
+        .mockResolvedValueOnce({ sequence: 1 })
+        .mockResolvedValueOnce({ sequence: 2 })
+        .mockResolvedValueOnce({ sequence: 3 })
+        .mockResolvedValueOnce({ sequence: 4 }),
+    };
+    const records = [
+      { ownerType: 'VENDOR', vendorId: 'vendor-1', barcodes: [occupiedBarcode] },
+      { ownerType: 'COMPANY', barcode: occupiedCompanyCode },
+      { ownerType: 'VENDOR', vendorId: 'vendor-2', barcodeKeys: [occupiedKeysCode] },
+    ];
+    const ProductModel = {
+      exists: jest.fn(async (filter) => {
+        const values = filter.$or[0].barcode.$in;
+        return records.some((record) => values.some((value) => (
+          record.barcode === value
+          || (record.barcodes || []).includes(value)
+          || (record.barcodeKeys || []).includes(value)
+        )));
+      }),
+    };
+
+    const generated = await generateUniqueInternalBarcode(ProductModel, Counter);
+
+    expect(generated).toBe('2900000000049');
+    expect(ProductModel.exists).toHaveBeenCalledTimes(4);
+    expect(ProductModel.exists.mock.calls[0][0].$or).toEqual(expect.arrayContaining([
+      { barcode: { $in: [occupiedBarcode] } },
+      { barcodes: { $in: [occupiedBarcode] } },
+      { barcodeKeys: { $in: [occupiedBarcode] } },
+    ]));
+  });
+
+  it('treats UPC-A and its leading-zero EAN-13 form as the same code', async () => {
+    const upc = '036000291452';
+    const ean = '0036000291452';
+    expect(barcodeLookupValues(upc)).toEqual([upc, ean]);
+    expect(barcodeMatches({ barcode: ean, barcodes: [] }, upc)).toBe(true);
+    expect(barcodeFilter(upc).$or).toEqual(expect.arrayContaining([
+      { barcode: { $in: [upc, ean] } },
+      { barcodes: { $in: [upc, ean] } },
+      { barcodeKeys: { $in: [upc, ean] } },
+    ]));
+  });
+
+  it('finds internal-code conflicts only across different product groups', async () => {
+    const query = { select: jest.fn(() => query), lean: jest.fn() };
+    const internalProduct = {
+      _id: 'p2', name: 'Existing Rice', productGroupId: 'group-2',
+      barcode: '2900000000018', barcodeSource: 'internal',
+    };
+    query.lean.mockResolvedValue([internalProduct]);
+    const ProductModel = { find: jest.fn(() => query) };
+
+    await expect(findInternalBarcodeConflict(ProductModel, internalProduct.barcode, {
+      productGroupId: 'group-1',
+    })).resolves.toBe(internalProduct);
+    await expect(findInternalBarcodeConflict(ProductModel, internalProduct.barcode, {
+      productGroupId: 'group-2',
+    })).resolves.toBeNull();
   });
 
   it('matches an extra barcode to the product', () => {
     expect(barcodeMatches({ barcode: 'PB-ORIGINAL', barcodes: ['01234567'] }, '01234567')).toBe(true);
+  });
+
+  it('recognizes legacy PB codes as internal only when barcodeSource is missing', () => {
+    expect(isInternalBarcodeProduct({ barcode: 'PB-LEGACY' })).toBe(true);
+    expect(isInternalBarcodeProduct({ barcode: 'PB-TYPED', barcodeSource: 'manufacturer' })).toBe(false);
   });
 
   it('chooses the product with the oldest remaining GRN/transfer-in lot', () => {
