@@ -48,6 +48,7 @@ export const reportConfig = {
     columns: [
       ['vendorName', 'Vendor'],
       ['shopName', 'Shop'],
+      ['vendorIdentifier', 'Member ID / Vendor code'],
       ['billCount', 'Bills', 'count'],
       ['quantitySold', 'Qty sold', 'quantity'],
       ['vendorPayable', 'Vendor payable', 'money'],

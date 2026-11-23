@@ -638,6 +638,11 @@
 	- Validation: frontend production build passes; no manual device testing done.
 - [x] UI: shorten header language buttons to EN and BN
 	- Files: frontend/src/i18n/translate.js (short codes), frontend/src/components/common/language-switcher.jsx (EN/BN badges with full-name aria-label/title), frontend/src/app/theme.css and globals.css (tighter switcher spacing, header title ellipsis/min-width).
+
+- [x] Feature: non-member vendor registration and required field asterisks
+	- Files: Vendor membership type and vendor-code counter model/service; optional Probashi ID validation and conditional verification; vendor directory, product selection, ledger, statements, payouts, reports, and vendor detail identity handling; shared Input/Select required markers; Form A/KYB required markers, notes, translations, and regression tests.
+	- Decisions: Keep the unique memberId index compatible with existing databases; non-members receive an atomic VND code stored as both the vendor identifier and persistent vendorCode, while memberId remains optional in the API and responses. Existing vendors without membershipType default to Probashi member. No migration was run.
+	- Validation: Full backend Jest suite passes (53 suites, 398 tests); frontend production build passes; vendor identity tests pass (3). Frontend suite is 48/49 due the existing untranslated goods-receive literals: “Create, review, approve, and print goods receipts for your location.”, “Receive location”, and “Company direct purchase (parcel)”.
 	- Decisions: full labels kept in LANGUAGES for accessibility; no automated tests run.
 - [x] UI: make EN and BN language toggle buttons more compact and slim
 	- Files: frontend/src/app/theme.css and globals.css (.language-switcher/.language-option).

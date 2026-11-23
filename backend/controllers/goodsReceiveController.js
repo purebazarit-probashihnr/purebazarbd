@@ -215,9 +215,9 @@ async function createReceiveVendorCopy(req, res, next) {
 
 async function nextChallanNumber(req, res, next) {
   try {
-    const vendor = await Vendor.findById(req.params.id).select('_id memberId').lean();
+    const vendor = await Vendor.findById(req.params.id).select('_id memberId vendorCode').lean();
     if (!vendor) throw statusError('Vendor not found', 404);
-    const code = String(vendor.memberId || vendor._id.toString().slice(-6)).toUpperCase();
+    const code = String(vendor.memberId || vendor.vendorCode || vendor._id.toString().slice(-6)).toUpperCase();
     let sequence = await GoodsReceive.countDocuments({ vendorId: vendor._id }) + 1;
     let challan = `CHN-${code}-${String(sequence).padStart(4, '0')}`;
     while (await GoodsReceive.exists({ vendorId: vendor._id, vendorChallanNumber: challan })) {
@@ -233,7 +233,7 @@ async function nextChallanNumber(req, res, next) {
 async function listVendors(req, res, next) {
   try {
     const vendors = await Vendor.find({ status: 'Active' })
-      .select('_id name shopName memberId mobile status')
+      .select('_id name shopName memberId vendorCode membershipType mobile status')
       .sort({ name: 1 })
       .lean();
     return res.json({
@@ -242,7 +242,10 @@ async function listVendors(req, res, next) {
         id: vendor._id.toString(),
         name: vendor.name,
         shopName: vendor.shopName,
-        memberId: vendor.memberId,
+        memberId: (vendor.membershipType || 'Probashi member') === 'Non-member' ? null : vendor.memberId,
+        vendorCode: vendor.vendorCode
+          || ((vendor.membershipType || 'Probashi member') === 'Non-member' ? vendor.memberId : null),
+        membershipType: vendor.membershipType || 'Probashi member',
         mobile: vendor.mobile,
         status: vendor.status,
       })),
@@ -331,7 +334,7 @@ async function getGoodsReceive(req, res, next) {
     const [products, vendor, location] = await Promise.all([
       Product.find({ _id: { $in: ids } }).select('_id name barcode unitId').lean(),
       receive.vendorId
-        ? Vendor.findById(receive.vendorId).select('_id name shopName memberId').lean()
+        ? Vendor.findById(receive.vendorId).select('_id name shopName memberId vendorCode membershipType').lean()
         : null,
       Location.findById(receive.warehouseId).select('name').lean(),
     ]);
@@ -342,7 +345,13 @@ async function getGoodsReceive(req, res, next) {
         ...receiveOutput(receive, products, labels),
         locationName: location?.name || null,
         vendor: vendor ? {
-          id: vendor._id.toString(), name: vendor.name, shopName: vendor.shopName, memberId: vendor.memberId,
+          id: vendor._id.toString(),
+          name: vendor.name,
+          shopName: vendor.shopName,
+          memberId: (vendor.membershipType || 'Probashi member') === 'Non-member' ? null : vendor.memberId,
+          vendorCode: vendor.vendorCode
+            || ((vendor.membershipType || 'Probashi member') === 'Non-member' ? vendor.memberId : null),
+          membershipType: vendor.membershipType || 'Probashi member',
         } : null,
       },
     });

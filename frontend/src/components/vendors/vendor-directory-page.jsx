@@ -86,7 +86,12 @@ export default function VendorDirectoryPage() {
       render: (name, vendor) => (
         <div>
           <strong className="block text-slate-800">{name}</strong>
-          <small className="text-slate-500">Member ID: {vendor.memberId}</small>
+          <Badge tone={vendor.membershipType === 'Non-member' ? 'neutral' : 'info'}>
+            {vendor.membershipType || (vendor.memberId ? 'Probashi member' : 'Non-member')}
+          </Badge>
+          <small className="block text-slate-500">
+            <T>{vendor.memberId ? 'Member ID' : 'Vendor code'}</T>: {vendor.memberId || vendor.vendorCode}
+          </small>
         </div>
       ),
     },
@@ -156,9 +161,9 @@ export default function VendorDirectoryPage() {
       </div>
 
 
-      <Card title="Find vendors" description="Search by member ID, vendor, shop, mobile, or product category.">
+      <Card title="Find vendors" description="Search by member ID or vendor code, vendor, shop, mobile, or product category.">
         <form className="grid gap-3 sm:grid-cols-[1fr_12rem_auto]" onSubmit={search}>
-          <Input label="Search" name="vendorSearch" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, member ID, shop, mobile..." />
+          <Input label="Search" name="vendorSearch" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, member ID, vendor code, shop, mobile..." />
           <Select label="Status" name="vendorStatus" value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value=""><T>{"All statuses"}</T></option>
             {['Active', 'Suspended', 'Closed'].map((value) => <option key={value} value={value}>{value}</option>)}

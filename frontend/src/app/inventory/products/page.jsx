@@ -94,9 +94,9 @@ export default function ProductsPage() {
 
   const visibleProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const probashiId = vendorFilter.trim().toLowerCase();
-    const vendorIds = probashiId
-      ? new Set(vendors.filter((vendor) => String(vendor.memberId || '').toLowerCase() === probashiId).map((vendor) => vendor.id))
+    const vendorIdentifier = vendorFilter.trim().toLowerCase();
+    const vendorIds = vendorIdentifier
+      ? new Set(vendors.filter((vendor) => String(vendor.memberId || vendor.vendorCode || '').toLowerCase() === vendorIdentifier).map((vendor) => vendor.id))
       : null;
     return products.filter((product) => (
       (!vendorIds || vendorIds.has(product.vendorId))
@@ -166,21 +166,21 @@ export default function ProductsPage() {
         </div>
         <CameraBarcodeScanner onScan={setSearch} />
         <label className="flex min-w-44 flex-col gap-1 text-sm font-medium text-slate-700">
-          <T>{"Vendor Probashi ID"}</T>
+          <T>{"Vendor ID (Member ID or vendor code)"}</T>
           <input
             type="search"
             name="vendorFilter"
-            aria-label="Filter by vendor Probashi ID"
-            list="vendor-probashi-ids"
+            aria-label="Filter by vendor ID"
+            list="vendor-identifiers"
             value={vendorFilter}
             onChange={(event) => setVendorFilter(event.target.value)}
-            placeholder="e.g. phr0007"
+            placeholder="e.g. phr0007 or VND-0001"
             autoComplete="off"
             className="rounded border border-slate-300 bg-white px-3 py-2 text-sm"
           />
-          <datalist id="vendor-probashi-ids">
-            {vendors.filter((vendor) => vendor.memberId).map((vendor) => (
-              <option key={vendor.id} value={vendor.memberId}>{vendor.shopName || vendor.name}</option>
+          <datalist id="vendor-identifiers">
+            {vendors.filter((vendor) => vendor.memberId || vendor.vendorCode).map((vendor) => (
+              <option key={vendor.id} value={vendor.memberId || vendor.vendorCode}>{vendor.shopName || vendor.name}</option>
             ))}
           </datalist>
         </label>

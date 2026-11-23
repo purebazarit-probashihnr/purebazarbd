@@ -77,7 +77,7 @@ export default function VendorStatementDocument({ receipt = false }) {
         <dl className="mb-6 grid gap-4 text-sm sm:grid-cols-2">
           <div><dt className="text-slate-500"><T>{"Vendor"}</T></dt><dd className="mt-1 font-semibold text-slate-800">{vendor.name}</dd></div>
           <div><dt className="text-slate-500"><T>{"Shop"}</T></dt><dd className="mt-1 font-semibold text-slate-800">{vendor.shopName}</dd></div>
-          <div><dt className="text-slate-500"><T>{"Member ID"}</T></dt><dd className="mt-1 font-semibold text-slate-800">{vendor.memberId}</dd></div>
+          <div><dt className="text-slate-500"><T>{vendor.memberId ? 'Member ID' : 'Vendor code'}</T></dt><dd className="mt-1 font-semibold text-slate-800">{vendor.memberId || vendor.vendorCode}</dd></div>
           <div><dt className="text-slate-500"><T>{"Statement period"}</T></dt><dd className="mt-1 font-semibold text-slate-800">{date(statement.periodStart)} – {date(statement.periodEnd)}</dd></div>
           {receipt && (
             <>

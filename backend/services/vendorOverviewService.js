@@ -112,12 +112,16 @@ async function getVendorOverview(vendorId, { startDate, endDate } = {}) {
     };
   });
   const sum = (field) => rows.reduce((total, row) => total + row[field], 0);
+  const membershipType = vendor.membershipType || (vendor.memberId ? 'Probashi member' : 'Non-member');
+  const isNonMember = membershipType === 'Non-member';
 
   return {
     vendor: {
       id: vendor._id.toString(),
       name: vendor.name,
-      memberId: vendor.memberId,
+      memberId: isNonMember ? null : vendor.memberId,
+      vendorCode: vendor.vendorCode || (isNonMember ? vendor.memberId : null),
+      membershipType,
       shopName: vendor.shopName,
       productCategory: vendor.productCategory,
       mobile: vendor.mobile,

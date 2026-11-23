@@ -17,6 +17,7 @@ import {
 } from '@/services/vendor';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
+import { vendorLabel } from '@/services/vendor-identity.cjs';
 
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
 const today = new Date().toISOString().slice(0, 10);
@@ -194,7 +195,7 @@ export default function VendorLedgerPage() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Select label="Vendor" name="vendor" value={vendorId} onChange={(event) => setVendorId(event.target.value)} disabled={loadingVendors}>
             <option value=""><T>{"Select a vendor"}</T></option>
-            {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name} · {vendor.shopName}</option>)}
+            {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendorLabel(vendor)}</option>)}
           </Select>
           <AccountingLocationFilter
             canSelect={canSelect}

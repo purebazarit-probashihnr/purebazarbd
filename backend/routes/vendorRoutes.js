@@ -87,7 +87,9 @@ router.patch('/statements/:statementId/status', payoutWrite, [
 ], validateRequest, vendorSettlementController.updateStatementStatus);
 
 router.post('/', write, [
-  field('memberId', 'Probashi Member ID', 100),
+  body('memberId').optional().isString().trim()
+    .custom((value) => value.length === 0 || value.length <= 100)
+    .withMessage('Probashi Member ID must be at most 100 characters'),
   field('name', 'Name', 150),
   body('applicantNameBn').optional({ checkFalsy: true }).isString().trim().isLength({ max: 150 })
     .withMessage('Bengali applicant name must be at most 150 characters'),

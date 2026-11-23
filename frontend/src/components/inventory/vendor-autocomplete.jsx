@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { searchVendors } from '@/services/inventory';
 import { T } from '@/i18n/language-provider';
-
-const label = (vendor) => `${vendor.name} - ${vendor.shopName || 'No shop'} (${vendor.memberId})`;
+import { vendorLabel } from '@/services/vendor-identity.cjs';
 
 export default function VendorAutocomplete({ token, value, onChange, excludeIds = [], resetKey }) {
   const [text, setText] = useState('');
@@ -33,7 +32,7 @@ export default function VendorAutocomplete({ token, value, onChange, excludeIds 
   }, [text, token, focused]);
 
   function choose(vendor) {
-    setText(label(vendor));
+    setText(vendorLabel(vendor));
     setFocused(false);
     onChange(vendor.id);
   }

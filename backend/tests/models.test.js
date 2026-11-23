@@ -9,7 +9,7 @@ describe('Mongoose models', () => {
       'AttendanceRecord', 'AuditLog', 'Brand', 'Category', 'DiscountLog', 'Employee', 'Expense', 'ExpenseCategory',
       'GoodsReceive', 'Location', 'Order', 'PriceHistory', 'Product', 'Return', 'Role', 'RosterEntry', 'SalaryAdvance',
       'SalarySheet', 'Settings', 'Shareholder', 'Shift', 'StockAdjustment', 'StockCount',
-      'StockMovement', 'StockTransfer', 'Unit', 'User', 'Vendor', 'VendorLedger',
+      'StockMovement', 'StockTransfer', 'Unit', 'User', 'Vendor', 'VendorCodeCounter', 'VendorLedger',
       'VendorRegistration', 'VendorStatement', 'WalletAuditLog', 'WalletLog', 'WalletReconciliation', 'WorkShift',
     ]);
   });

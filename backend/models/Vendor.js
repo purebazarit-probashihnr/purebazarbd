@@ -2,6 +2,13 @@ const mongoose = require('mongoose');
 
 const vendorSchema = new mongoose.Schema({
   memberId: { type: String, required: true, trim: true, unique: true },
+  vendorCode: { type: String, trim: true, unique: true, sparse: true },
+  membershipType: {
+    type: String,
+    enum: ['Probashi member', 'Non-member'],
+    default: 'Probashi member',
+    required: true,
+  },
   name: { type: String, required: true, trim: true },
   applicantNameBn: { type: String, trim: true, maxlength: 150 },
   fatherName: { type: String, trim: true, maxlength: 150 },

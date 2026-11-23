@@ -14,7 +14,7 @@ async function vendorProfitability({ from, to, locationId } = {}) {
   const bounds = periodBounds({ from, to });
   const [entries, vendors] = await Promise.all([
     VendorLedger.find(locationId ? { locationId } : {}).lean(),
-    Vendor.find({}).select('name shopName memberId').lean(),
+    Vendor.find({}).select('name shopName memberId vendorCode membershipType').lean(),
   ]);
   const names = new Map(vendors.map((vendor) => [String(vendor._id), vendor]));
   const perVendor = new Map();
@@ -30,11 +30,16 @@ async function vendorProfitability({ from, to, locationId } = {}) {
   });
   const rows = [...perVendor.entries()].map(([vendorId, row]) => {
     const vendor = names.get(vendorId) || {};
+    const membershipType = vendor.membershipType || (vendor.memberId ? 'Probashi member' : 'Non-member');
+    const isNonMember = membershipType === 'Non-member';
     return {
       vendorId,
       vendorName: vendor.name || 'Unknown vendor',
       shopName: vendor.shopName || null,
-      memberId: vendor.memberId || null,
+      memberId: isNonMember ? null : vendor.memberId || null,
+      vendorCode: vendor.vendorCode || (isNonMember ? vendor.memberId : null),
+      vendorIdentifier: vendor.memberId || vendor.vendorCode || null,
+      membershipType,
       billCount: row.bills.size,
       quantitySold: qty(row.quantity),
       vendorPayable: money(row.payable),
