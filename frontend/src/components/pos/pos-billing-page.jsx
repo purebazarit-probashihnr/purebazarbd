@@ -161,6 +161,7 @@ export default function PosBillingPage() {
               onWalletMemberId={billing.setWalletMemberId}
               onWalletReference={billing.setWalletReference}
               offlineWalletAllowed={billing.offlineWalletAllowed}
+              offlineWalletDetailsRequired={billing.offlineWalletDetailsRequired}
               offlineWalletMaximum={billing.offlineWalletMaximum}
               walletError={billing.offlineWalletMessage}
               offline={!online}

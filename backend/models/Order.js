@@ -32,7 +32,7 @@ const orderSchema = new mongoose.Schema({
   walletMemberId: { type: String, trim: true },
   walletReference: { type: String, trim: true },
   walletVerification: {
-    type: String, enum: ['pending', 'verified', 'mismatch', 'not_found'],
+    type: String, enum: ['pending', 'verified', 'mismatch', 'not_found', 'unverifiable'],
   },
   walletVerificationReason: { type: String, trim: true },
   walletVerificationCheckedAt: { type: Date },

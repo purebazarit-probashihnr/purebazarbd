@@ -82,6 +82,21 @@ describe('offline wallet verification', () => {
     expect(order.walletVerificationReason).toMatch(/No matching Probashi transaction/);
   });
 
+  it.each([
+    ['member ID', { walletMemberId: '', walletReference: 'TX-100' }],
+    ['reference', { walletMemberId: 'PB-100', walletReference: '' }],
+  ])('marks a bill without a %s as unverifiable without contacting Probashi', async (_missing, fields) => {
+    Object.assign(order, fields);
+
+    await verifyOfflineWalletOrder(order._id);
+
+    expect(order.walletVerification).toBe('unverifiable');
+    expect(order.walletVerificationReason).toBe('No member ID or reference recorded');
+    expect(probashiWalletService.verifyMember).not.toHaveBeenCalled();
+    expect(probashiWalletService.getTransactionReport).not.toHaveBeenCalled();
+    expect(order.save).toHaveBeenCalled();
+  });
+
   it('keeps the bill pending with a reason when Probashi is unreachable', async () => {
     probashiWalletService.getTransactionReport.mockRejectedValue(new Error('service unavailable'));
 

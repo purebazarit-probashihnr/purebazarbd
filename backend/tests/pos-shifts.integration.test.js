@@ -163,6 +163,13 @@ describe('POS cashier shifts API', () => {
         payments: [{ method: 'WALLET', amount: 75 }],
       },
       {
+        cashier: cashierId, outlet: outletId, paymentStatus: 'PAID',
+        offlineId: 'offline-wallet-unverifiable-in-shift', walletOffline: true,
+        walletVerification: 'unverifiable',
+        soldAt: new Date(soldAt.getTime() + 3), createdAt: new Date(Date.now() + 60000),
+        payments: [{ method: 'WALLET', amount: 25 }],
+      },
+      {
         cashier: cashierId, outlet: outletId, paymentStatus: 'PAID', offlineId: 'offline-before-shift',
         soldAt: new Date(soldAt.getTime() - 1), createdAt: soldAt,
         payments: [{ method: 'CASH', amount: 100 }],
@@ -189,7 +196,7 @@ describe('POS cashier shifts API', () => {
         { method: 'Card', expectedAmount: 19.75, actualAmount: 19.75 },
         { method: 'bKash', expectedAmount: 20, actualAmount: 20 },
       ]),
-      offlineWalletPending: { count: 1, amount: 75 },
+      offlineWalletPending: { count: 2, amount: 100 },
     });
     expect(models.Order.find).toHaveBeenCalledWith(expect.objectContaining({
       cashier: cashierId,

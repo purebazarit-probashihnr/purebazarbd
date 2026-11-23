@@ -25,6 +25,7 @@ jest.mock('../models', () => ({
       commissionEnabled: false,
       vendorWalletPayoutEnabled: false,
       allowWalletPaymentOffline: false,
+      requireMemberIdAndReferenceForOfflineWallet: false,
       maximumOfflineWalletAmountPerBill: 2000,
       outlets: [],
     }),
@@ -78,6 +79,7 @@ function settingsDocument(fields = {}) {
     commissionEnabled: false,
     vendorWalletPayoutEnabled: false,
     allowWalletPaymentOffline: false,
+    requireMemberIdAndReferenceForOfflineWallet: false,
     maximumOfflineWalletAmountPerBill: 2000,
     outlets: [],
     ...fields,
@@ -153,11 +155,13 @@ describe('settings and audit endpoints', () => {
   it('saves offline wallet controls and rejects a negative maximum', async () => {
     const updated = settingsDocument({
       allowWalletPaymentOffline: true,
+      requireMemberIdAndReferenceForOfflineWallet: true,
       maximumOfflineWalletAmountPerBill: 1500,
     });
     Settings.findOneAndUpdate.mockResolvedValue(updated);
     const response = await request(app).put('/api/settings').set(auth).send({
       allowWalletPaymentOffline: true,
+      requireMemberIdAndReferenceForOfflineWallet: true,
       maximumOfflineWalletAmountPerBill: 1500,
     });
     const invalid = await request(app).put('/api/settings').set(auth).send({
@@ -167,6 +171,7 @@ describe('settings and audit endpoints', () => {
     expect(response.status).toBe(200);
     expect(response.body.settings).toMatchObject({
       allowWalletPaymentOffline: true,
+      requireMemberIdAndReferenceForOfflineWallet: true,
       maximumOfflineWalletAmountPerBill: 1500,
     });
     expect(invalid.status).toBe(400);
@@ -194,6 +199,7 @@ describe('settings and audit endpoints', () => {
       commissionEnabled: false,
       vendorWalletPayoutEnabled: false,
       allowWalletPaymentOffline: false,
+      requireMemberIdAndReferenceForOfflineWallet: false,
       maximumOfflineWalletAmountPerBill: 2000,
     });
     expect(defaults.body.settings.probashiStatus).toBe('NotConfigured');

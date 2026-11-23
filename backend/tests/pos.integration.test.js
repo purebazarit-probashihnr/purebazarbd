@@ -652,6 +652,71 @@ describe('POS checkout API', () => {
     expect(walletService.verifyMember).not.toHaveBeenCalled();
   });
 
+  it('syncs an offline wallet bill once when member details are optional', async () => {
+    offlineWalletVerifier.verifyOfflineWalletOrder.mockImplementation(async (orderId) => {
+      const order = db.orders.find((candidate) => candidate._id.equals(orderId));
+      order.walletVerification = 'unverifiable';
+      order.walletVerificationReason = 'No member ID or reference recorded';
+      return order;
+    });
+    const body = {
+      offlineId: 'e63b3096-2f26-4c61-8bb4-03e5428ba929',
+      offlineNumber: 'OFF-65B000000000000000000003-20',
+      soldAt: '2026-10-18T09:00:00.000Z',
+      items: line(),
+      payments: [{ method: 'WALLET', amount: 95 }],
+      walletOffline: true,
+      walletMemberId: '',
+      walletReference: '',
+    };
+
+    const first = await request(app).post('/api/pos/offline-sync').set(auth()).send(body);
+    const duplicate = await request(app).post('/api/pos/offline-sync').set(auth()).send(body);
+    await new Promise(setImmediate);
+
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({
+      synced: true,
+      duplicate: false,
+      order: { walletOffline: true, walletVerification: 'pending', grandTotal: 95 },
+    });
+    expect(duplicate.status).toBe(200);
+    expect(duplicate.body).toMatchObject({ synced: true, duplicate: true });
+    expect(db.orders).toHaveLength(1);
+    expect(db.orders[0]).not.toHaveProperty('walletMemberId');
+    expect(db.orders[0]).not.toHaveProperty('walletReference');
+    expect(db.orders[0]).toMatchObject({
+      walletVerification: 'unverifiable',
+      walletVerificationReason: 'No member ID or reference recorded',
+    });
+    expect(offlineWalletVerifier.verifyOfflineWalletOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects empty offline wallet identifiers when General Settings requires them', async () => {
+    models.Settings.findOne.mockReturnValue(query({
+      discountLimitByRole: { Cashier: 5 },
+      enabledPaymentMethods: ['Cash', 'bKash', 'Nagad', 'Card', 'Wallet'],
+      allowWalletPaymentOffline: true,
+      requireMemberIdAndReferenceForOfflineWallet: true,
+      maximumOfflineWalletAmountPerBill: 2000,
+    }));
+
+    const response = await request(app).post('/api/pos/offline-sync').set(auth()).send({
+      offlineId: '70db388d-46a9-4c67-b3bd-9ae83733072e',
+      offlineNumber: 'OFF-65B000000000000000000003-21',
+      items: line(),
+      payments: [{ method: 'WALLET', amount: 95 }],
+      walletOffline: true,
+      walletMemberId: '',
+      walletReference: '',
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/Member ID and Probashi transaction reference are required/);
+    expect(db.orders).toHaveLength(0);
+    expect(offlineWalletVerifier.verifyOfflineWalletOrder).not.toHaveBeenCalled();
+  });
+
   it('saves and flags an offline sale that makes outlet stock negative', async () => {
     db.movements = [];
     const response = await request(app).post('/api/pos/offline-sync').set(auth()).send({

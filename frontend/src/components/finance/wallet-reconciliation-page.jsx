@@ -36,7 +36,7 @@ export default function WalletReconciliationPage() {
   const [saving, setSaving] = useState(false);
   const [offlineWallets, setOfflineWallets] = useState([]);
   const [offlineWalletTotals, setOfflineWalletTotals] = useState({
-    pending: 0, verified: 0, mismatch: 0, notFound: 0, flagged: 0,
+    pending: 0, verified: 0, mismatch: 0, notFound: 0, unverifiable: 0, flagged: 0,
   });
   const [offlineWalletLoading, setOfflineWalletLoading] = useState(true);
   const [verifyingWalletId, setVerifyingWalletId] = useState('');
@@ -211,6 +211,7 @@ export default function WalletReconciliationPage() {
           <Card><small className="text-slate-500">Verified</small><strong className="mt-1 block text-xl text-green-700">{offlineWalletTotals.verified}</strong></Card>
           <Card><small className="text-slate-500">Mismatch</small><strong className="mt-1 block text-xl text-red-700">{offlineWalletTotals.mismatch}</strong></Card>
           <Card><small className="text-slate-500">Not found</small><strong className="mt-1 block text-xl text-red-700">{offlineWalletTotals.notFound}</strong></Card>
+          <Card><small className="text-slate-500">Unverifiable</small><strong className="mt-1 block text-xl text-red-700">{offlineWalletTotals.unverifiable}</strong></Card>
         </div>
         {offlineWalletTotals.flagged > 0 && (
           <p role="status" className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">

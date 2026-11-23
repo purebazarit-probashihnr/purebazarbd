@@ -36,8 +36,8 @@ const billSchema = Joi.object({
   offlineId: Joi.string().trim().min(1).max(120),
   offlineNumber: Joi.string().trim().min(1).max(120),
   walletOffline: Joi.boolean(),
-  walletMemberId: Joi.string().trim().min(1).max(100),
-  walletReference: Joi.string().trim().min(1).max(120),
+  walletMemberId: Joi.string().trim().min(1).max(100).allow(''),
+  walletReference: Joi.string().trim().min(1).max(120).allow(''),
   soldAt: Joi.date().iso(),
 }).unknown(false);
 

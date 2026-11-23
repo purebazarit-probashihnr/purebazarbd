@@ -56,7 +56,8 @@ function offlineWalletError(settings, total, memberId, reference) {
   if (Number(total) > maximum) {
     return `Offline wallet payment is limited to ৳${maximum.toFixed(2)} per bill.`;
   }
-  if (!String(memberId || '').trim() || !String(reference || '').trim()) {
+  if (settings.requireMemberIdAndReferenceForOfflineWallet === true
+    && (!String(memberId || '').trim() || !String(reference || '').trim())) {
     return 'Enter both the member ID and Probashi transaction reference for an offline wallet payment.';
   }
   return '';

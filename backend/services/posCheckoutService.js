@@ -110,7 +110,11 @@ async function commitBill(req, res, next, offline) {
     if (deferredWallet && req.body.walletOffline !== true) {
       throw statusError('Wallet payments cannot be queued offline');
     }
-    if (deferredWallet && (!req.body.walletMemberId || !req.body.walletReference)) {
+    const walletMemberId = String(req.body.walletMemberId || '').trim();
+    const walletReference = String(req.body.walletReference || '').trim();
+    if (deferredWallet
+      && result.settings.requireMemberIdAndReferenceForOfflineWallet === true
+      && (!walletMemberId || !walletReference)) {
       throw statusError('Member ID and Probashi transaction reference are required for an offline wallet payment');
     }
     if (deferredWallet
@@ -119,7 +123,10 @@ async function commitBill(req, res, next, offline) {
         `Offline wallet payment is limited to ${Number(result.settings.maximumOfflineWalletAmountPerBill ?? 2000).toFixed(2)} per bill`,
       );
     }
-    if (!deferredWallet && (req.body.walletOffline || req.body.walletMemberId || req.body.walletReference)) {
+    const hasWalletDetails = ['walletMemberId', 'walletReference'].some((field) => (
+      Object.prototype.hasOwnProperty.call(req.body, field)
+    ));
+    if (!deferredWallet && (req.body.walletOffline || hasWalletDetails)) {
       throw statusError('Offline wallet details are only valid for a queued wallet payment');
     }
     if (result.approvalRequired && !result.approvedBy) {
@@ -195,8 +202,8 @@ async function commitBill(req, res, next, offline) {
         } : {}),
         ...(deferredWallet ? {
           walletOffline: true,
-          walletMemberId: req.body.walletMemberId,
-          walletReference: req.body.walletReference,
+          ...(walletMemberId ? { walletMemberId } : {}),
+          ...(walletReference ? { walletReference } : {}),
           walletVerification: 'pending',
         } : {}),
         channel: 'POS',

@@ -63,18 +63,19 @@ async function listOfflineWalletBills(req, res, next) {
   try {
     const filter = { walletOffline: true };
     if (req.locationId) filter.outlet = req.locationId;
-    const [orders, pending, verified, mismatch, notFound] = await Promise.all([
+    const [orders, pending, verified, mismatch, notFound, unverifiable] = await Promise.all([
       Order.find(filter).populate('cashier', 'name').sort({ soldAt: -1, createdAt: -1 }).limit(200).lean(),
       Order.countDocuments({ ...filter, walletVerification: 'pending' }),
       Order.countDocuments({ ...filter, walletVerification: 'verified' }),
       Order.countDocuments({ ...filter, walletVerification: 'mismatch' }),
       Order.countDocuments({ ...filter, walletVerification: 'not_found' }),
+      Order.countDocuments({ ...filter, walletVerification: 'unverifiable' }),
     ]);
     res.json({
       orders,
       totals: {
-        pending, verified, mismatch, notFound,
-        flagged: mismatch + notFound,
+        pending, verified, mismatch, notFound, unverifiable,
+        flagged: mismatch + notFound + unverifiable,
       },
     });
   } catch (error) { next(error); }

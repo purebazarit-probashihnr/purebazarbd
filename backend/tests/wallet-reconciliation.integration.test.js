@@ -9,7 +9,7 @@ jest.mock('../models', () => {
   return {
     AuditLog: { create: jest.fn() },
     User: { findById: jest.fn() },
-    Order: { find: jest.fn() },
+    Order: { find: jest.fn(), countDocuments: jest.fn() },
     Shareholder: { find: jest.fn() },
     WalletReconciliation: fakeModel(jest.requireActual('../models/WalletReconciliation'), store),
     __store: store,
@@ -23,6 +23,7 @@ const errorMiddleware = require('../middlewares/errorMiddleware');
 
 const secret = 'wallet-recon-test-secret';
 const userId = new mongoose.Types.ObjectId('65d000000000000000000001');
+const locationId = new mongoose.Types.ObjectId('65d000000000000000000002');
 const date = '2026-03-10';
 const id = () => new mongoose.Types.ObjectId();
 
@@ -50,7 +51,10 @@ describe('wallet reconciliation API', () => {
     models.AuditLog.create.mockReset().mockResolvedValue({});
     models.User.findById.mockImplementation(() => ({
       populate: jest.fn(async () => ({
-        _id: userId, isActive: true, roleId: { _id: userId, name: 'Finance', permissions },
+        _id: userId,
+        locationId,
+        isActive: true,
+        roleId: { _id: userId, name: 'Finance', permissions },
       })),
     }));
     models.Shareholder.find.mockReturnValue({ lean: async () => [member] });
@@ -127,5 +131,38 @@ describe('wallet reconciliation API', () => {
   it('validates dates', async () => {
     expect((await request(app).post('/api/finance/wallet-reconciliation/run').set(auth).send({ date: 'nope' })).status).toBe(400);
     expect((await request(app).post('/api/finance/wallet-reconciliation/run').set(auth).send({ date: '2999-01-01' })).status).toBe(400);
+  });
+
+  it('includes and counts unverifiable offline wallet bills', async () => {
+    const order = {
+      _id: id(),
+      orderNumber: 'OFF-UNVERIFIABLE',
+      walletOffline: true,
+      walletVerification: 'unverifiable',
+      walletVerificationReason: 'No member ID or reference recorded',
+    };
+    models.Order.find.mockReturnValue({
+      populate: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([order]),
+    });
+    models.Order.countDocuments.mockImplementation((filter) => Promise.resolve(
+      filter.walletVerification === 'unverifiable' ? 1 : 0,
+    ));
+
+    const response = await request(app).get('/api/finance/wallet-reconciliation/offline').set(auth);
+
+    expect(response.status).toBe(200);
+    expect(response.body.orders).toHaveLength(1);
+    expect(response.body.orders[0]).toMatchObject({
+      orderNumber: 'OFF-UNVERIFIABLE',
+      walletVerification: 'unverifiable',
+      walletVerificationReason: 'No member ID or reference recorded',
+    });
+    expect(response.body.totals).toMatchObject({
+      unverifiable: 1,
+      flagged: 1,
+    });
   });
 });

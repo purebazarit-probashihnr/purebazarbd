@@ -245,6 +245,7 @@ export default function usePosBilling({
   return {
     methods, selectedMethods, amounts, walletMemberId, setWalletMemberId,
     walletReference, setWalletReference, offlineWalletAllowed,
+    offlineWalletDetailsRequired: catalog?.settings?.requireMemberIdAndReferenceForOfflineWallet === true,
     offlineWalletMaximum: Number(catalog?.settings?.maximumOfflineWalletAmountPerBill ?? 2000),
     offlineWalletMessage, bill, previewLoading, previewError, discountApproved,
     setDiscountApproved, checkoutLoading, checkoutError, setCheckoutError, successMessage,
