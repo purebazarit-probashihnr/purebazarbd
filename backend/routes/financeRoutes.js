@@ -59,8 +59,9 @@ router.patch('/expenses/:id', ...can('expenses:write'), expenseAttachmentUpload,
 router.get('/wallet-reconciliation', can('finance:read'), [
   dateQuery('date', true),
 ], validateRequest, walletReconciliationController.list);
-router.get('/wallet-reconciliation/offline', ...can('finance:read'), enforceLocationScope.forAccountingRead,
-  walletReconciliationController.listOfflineWalletBills);
+router.get('/wallet-reconciliation/offline', ...can('finance:read'), enforceLocationScope.forAccountingRead, [
+  dateQuery('date', true),
+], validateRequest, walletReconciliationController.listOfflineWalletBills);
 router.post('/wallet-reconciliation/offline/:id/verify', ...can('finance:write'),
   enforceLocationScope.forAccountingWrite, [
     param('id').isMongoId().withMessage('A valid order ID is required'),

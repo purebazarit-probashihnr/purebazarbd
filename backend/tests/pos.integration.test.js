@@ -620,16 +620,14 @@ describe('POS checkout API', () => {
     expect(db.movements.filter((movement) => movement.type === 'SALE')).toHaveLength(1);
   });
 
-  it('syncs offline wallet bills once with payment and cached wallet discount totals matching', async () => {
+  it('syncs offline wallet bills without identifiers, once, as unverifiable', async () => {
     const body = {
       offlineId: '4bf76c78-bd69-4c74-800f-1c85797e2355',
       offlineNumber: 'OFF-65B000000000000000000003-19',
       soldAt: '2026-10-18T09:00:00.000Z',
       items: line(),
-      payments: [{ method: 'WALLET', amount: 95 }],
+      payments: [{ method: 'WALLET', amount: 0.01 }],
       walletOffline: true,
-      walletMemberId: 'PB-001',
-      walletReference: 'TX-001',
     };
 
     const first = await request(app).post('/api/pos/offline-sync').set(auth()).send(body);
@@ -637,82 +635,50 @@ describe('POS checkout API', () => {
 
     expect(first.status).toBe(200);
     expect(first.body).toMatchObject({
-      synced: true, duplicate: false, walletPending: true, note: 'wallet pending',
+      synced: true, duplicate: false, walletUnverifiable: true,
+      note: 'No member ID or reference recorded',
       order: {
-        walletOffline: true, walletVerification: 'pending',
-        walletMemberId: 'PB-001', walletReference: 'TX-001',
+        walletOffline: true,
+        walletVerification: 'unverifiable',
+        walletVerificationReason: 'No member ID or reference recorded',
         shareholderDiscountAmount: 5, grandTotal: 95,
         payments: [{ method: 'WALLET', amount: 95 }],
       },
     });
     expect(duplicate.status).toBe(200);
-    expect(duplicate.body).toMatchObject({ synced: true, duplicate: true });
+    expect(duplicate.body).toMatchObject({
+      synced: true,
+      duplicate: true,
+      walletUnverifiable: true,
+      order: {
+        walletVerification: 'unverifiable',
+        walletVerificationReason: 'No member ID or reference recorded',
+      },
+    });
     expect(db.orders).toHaveLength(1);
     expect(walletService.checkWalletBalance).not.toHaveBeenCalled();
     expect(walletService.verifyMember).not.toHaveBeenCalled();
+    expect(offlineWalletVerifier.verifyOfflineWalletOrder).not.toHaveBeenCalled();
   });
 
-  it('syncs an offline wallet bill once when member details are optional', async () => {
-    offlineWalletVerifier.verifyOfflineWalletOrder.mockImplementation(async (orderId) => {
-      const order = db.orders.find((candidate) => candidate._id.equals(orderId));
-      order.walletVerification = 'unverifiable';
-      order.walletVerificationReason = 'No member ID or reference recorded';
-      return order;
-    });
-    const body = {
-      offlineId: 'e63b3096-2f26-4c61-8bb4-03e5428ba929',
-      offlineNumber: 'OFF-65B000000000000000000003-20',
-      soldAt: '2026-10-18T09:00:00.000Z',
-      items: line(),
-      payments: [{ method: 'WALLET', amount: 95 }],
-      walletOffline: true,
-      walletMemberId: '',
-      walletReference: '',
-    };
-
-    const first = await request(app).post('/api/pos/offline-sync').set(auth()).send(body);
-    const duplicate = await request(app).post('/api/pos/offline-sync').set(auth()).send(body);
-    await new Promise(setImmediate);
-
-    expect(first.status).toBe(200);
-    expect(first.body).toMatchObject({
-      synced: true,
-      duplicate: false,
-      order: { walletOffline: true, walletVerification: 'pending', grandTotal: 95 },
-    });
-    expect(duplicate.status).toBe(200);
-    expect(duplicate.body).toMatchObject({ synced: true, duplicate: true });
-    expect(db.orders).toHaveLength(1);
-    expect(db.orders[0]).not.toHaveProperty('walletMemberId');
-    expect(db.orders[0]).not.toHaveProperty('walletReference');
-    expect(db.orders[0]).toMatchObject({
-      walletVerification: 'unverifiable',
-      walletVerificationReason: 'No member ID or reference recorded',
-    });
-    expect(offlineWalletVerifier.verifyOfflineWalletOrder).toHaveBeenCalledTimes(1);
-  });
-
-  it('rejects empty offline wallet identifiers when General Settings requires them', async () => {
+  it('refuses an offline wallet bill above the configured maximum', async () => {
     models.Settings.findOne.mockReturnValue(query({
       discountLimitByRole: { Cashier: 5 },
       enabledPaymentMethods: ['Cash', 'bKash', 'Nagad', 'Card', 'Wallet'],
       allowWalletPaymentOffline: true,
-      requireMemberIdAndReferenceForOfflineWallet: true,
-      maximumOfflineWalletAmountPerBill: 2000,
+      maximumOfflineWalletAmountPerBill: 90,
     }));
 
     const response = await request(app).post('/api/pos/offline-sync').set(auth()).send({
       offlineId: '70db388d-46a9-4c67-b3bd-9ae83733072e',
       offlineNumber: 'OFF-65B000000000000000000003-21',
       items: line(),
-      payments: [{ method: 'WALLET', amount: 95 }],
+      payments: [{ method: 'WALLET', amount: 100 }],
       walletOffline: true,
-      walletMemberId: '',
-      walletReference: '',
     });
 
     expect(response.status).toBe(400);
-    expect(response.body.message).toMatch(/Member ID and Probashi transaction reference are required/);
+    expect(response.body.message).toMatch(/limited to 90\.00 per bill/);
     expect(db.orders).toHaveLength(0);
     expect(offlineWalletVerifier.verifyOfflineWalletOrder).not.toHaveBeenCalled();
   });

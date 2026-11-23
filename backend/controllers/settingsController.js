@@ -13,7 +13,6 @@ const settingsInputSchema = Joi.object({
   offlineSessionHours: Joi.number().integer().min(1).max(24),
   lockCashierToPos: Joi.boolean(),
   allowWalletPaymentOffline: Joi.boolean(),
-  requireMemberIdAndReferenceForOfflineWallet: Joi.boolean(),
   maximumOfflineWalletAmountPerBill: Joi.number().min(0).precision(2),
   showPricesOnChallan: Joi.boolean(),
   vatEnabled: Joi.boolean(),
@@ -60,9 +59,6 @@ function settingsResponse(settings) {
   if (result.offlineSessionHours == null) result.offlineSessionHours = 24;
   if (result.lockCashierToPos == null) result.lockCashierToPos = false;
   if (result.allowWalletPaymentOffline == null) result.allowWalletPaymentOffline = false;
-  if (result.requireMemberIdAndReferenceForOfflineWallet == null) {
-    result.requireMemberIdAndReferenceForOfflineWallet = false;
-  }
   if (result.maximumOfflineWalletAmountPerBill == null) result.maximumOfflineWalletAmountPerBill = 2000;
   delete result.offlineNumberCounters;
   delete result.singleton;

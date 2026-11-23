@@ -755,3 +755,8 @@
 	- Files: Default-off General Settings requirement; conditional POS inputs and checkout validation; optional blank wallet identifiers in offline sync; `unverifiable` post-sync state and Finance list totals; cashier shift regression coverage.
 	- Decisions: When identifier enforcement is off, empty values are omitted from synced orders and verification marks them `unverifiable` without calling Probashi. Enabled enforcement still requires both fields. The wallet amount limit and receipt pending line are unchanged. No database migration was run.
 	- Validation: Full backend Jest passes (53 suites, 390 tests); frontend production build passes; focused offline POS tests pass (6/6). Frontend-wide tests retain the existing i18n failure for nine untranslated strings.
+
+- [x] O1b Remove member ID and reference from offline wallet
+	- Files: Removed cashier identifier inputs and setting; omitted identifiers from new offline queue payloads and receipts; initialized synced wallet bills as `unverifiable`; added selected-date offline wallet amount totals and outlet detail to Finance.
+	- Decisions: Legacy queued identifier fields remain accepted for sync compatibility but are not stored or used. New offline wallet bills never trigger automatic Probashi verification. The existing offline-wallet permission and per-bill maximum remain unchanged. No database migration was run.
+	- Validation: Full backend Jest passes (53 suites, 390 tests); frontend production build passes; focused offline POS tests pass (6/6). Frontend-wide tests retain the existing i18n failure for nine untranslated strings.

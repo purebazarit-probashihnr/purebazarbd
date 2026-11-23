@@ -30,8 +30,6 @@ export default function usePosBilling({
 }) {
   const [methods, setMethods] = useState(['CASH']);
   const [amounts, setAmounts] = useState({});
-  const [walletMemberId, setWalletMemberId] = useState('');
-  const [walletReference, setWalletReference] = useState('');
   const [bill, setBill] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
@@ -51,8 +49,6 @@ export default function usePosBilling({
     ? offlineWalletError(
       catalog?.settings || {},
       bill?.grandTotal || 0,
-      walletMemberId,
-      walletReference,
     )
     : '';
   let payload;
@@ -137,8 +133,6 @@ export default function usePosBilling({
     setBillDiscount(null);
     setMethods(['CASH']);
     setAmounts({});
-    setWalletMemberId('');
-    setWalletReference('');
     setDiscountApproved(false);
     setBill(null);
     setCheckoutError('');
@@ -165,8 +159,6 @@ export default function usePosBilling({
             soldAt,
             ...(selectedMethods.includes('WALLET') ? {
               walletOffline: true,
-              walletMemberId: walletMemberId.trim(),
-              walletReference: walletReference.trim(),
             } : {}),
             ...(canApprove && discountApproved ? { discountApproved: true } : {}),
           },
@@ -243,9 +235,7 @@ export default function usePosBilling({
     && (!online || !hasStockProblem(items)) && hasOutletSelection;
 
   return {
-    methods, selectedMethods, amounts, walletMemberId, setWalletMemberId,
-    walletReference, setWalletReference, offlineWalletAllowed,
-    offlineWalletDetailsRequired: catalog?.settings?.requireMemberIdAndReferenceForOfflineWallet === true,
+    methods, selectedMethods, amounts, offlineWalletAllowed,
     offlineWalletMaximum: Number(catalog?.settings?.maximumOfflineWalletAmountPerBill ?? 2000),
     offlineWalletMessage, bill, previewLoading, previewError, discountApproved,
     setDiscountApproved, checkoutLoading, checkoutError, setCheckoutError, successMessage,

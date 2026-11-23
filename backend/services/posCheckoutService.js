@@ -9,7 +9,6 @@ const {
 } = require('./posBillService');
 const { unitLabelMap, displayFields } = require('../utils/productDisplay');
 const probashiWalletService = require('./probashiWalletService');
-const offlineWalletVerificationService = require('./offlineWalletVerificationService');
 
 function money(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -33,15 +32,15 @@ function objectOf(value) {
   return value?.toObject ? value.toObject() : value;
 }
 
-function validatePayments(result, offline = false, deferredWallet = false) {
+function validatePayments(result, offline = false) {
   const payments = result.payments;
-  if (result.wallet && !deferredWallet) {
+  if (result.wallet) {
     payments[0].amount = result.bill.grandTotal;
   }
   if (payments.some((payment) => !Number.isFinite(payment.amount) || payment.amount <= 0)) {
     throw statusError('Every payment must have a positive amount');
   }
-  if (!result.wallet || deferredWallet) {
+  if (!result.wallet) {
     const total = money(payments.reduce((sum, payment) => sum + payment.amount, 0));
     if (total !== result.bill.grandTotal) throw statusError('Payments must equal the final bill total');
   }
@@ -100,6 +99,9 @@ async function commitBill(req, res, next, offline) {
           ...(existing.walletOffline && existing.walletVerification === 'pending'
             ? { walletPending: true, note: 'wallet pending' }
             : {}),
+          ...(existing.walletOffline && existing.walletVerification === 'unverifiable'
+            ? { walletUnverifiable: true, note: 'No member ID or reference recorded' }
+            : {}),
           order: existing,
           receipt: receiptData(existing),
         });
@@ -109,13 +111,6 @@ async function commitBill(req, res, next, offline) {
     const deferredWallet = offline && result.wallet;
     if (deferredWallet && req.body.walletOffline !== true) {
       throw statusError('Wallet payments cannot be queued offline');
-    }
-    const walletMemberId = String(req.body.walletMemberId || '').trim();
-    const walletReference = String(req.body.walletReference || '').trim();
-    if (deferredWallet
-      && result.settings.requireMemberIdAndReferenceForOfflineWallet === true
-      && (!walletMemberId || !walletReference)) {
-      throw statusError('Member ID and Probashi transaction reference are required for an offline wallet payment');
     }
     if (deferredWallet
       && result.bill.grandTotal > Number(result.settings.maximumOfflineWalletAmountPerBill ?? 2000)) {
@@ -132,7 +127,7 @@ async function commitBill(req, res, next, offline) {
     if (result.approvalRequired && !result.approvedBy) {
       throw statusError('Discount exceeds this role limit; Super Admin approval is required', 403);
     }
-    validatePayments(result, offline, deferredWallet);
+    validatePayments(result, offline);
     const sufficient = deferredWallet ? null : await checkWallet(result, req.user._id);
     if (sufficient === false) {
       const repriced = await loadBill({
@@ -202,9 +197,8 @@ async function commitBill(req, res, next, offline) {
         } : {}),
         ...(deferredWallet ? {
           walletOffline: true,
-          ...(walletMemberId ? { walletMemberId } : {}),
-          ...(walletReference ? { walletReference } : {}),
-          walletVerification: 'pending',
+          walletVerification: 'unverifiable',
+          walletVerificationReason: 'No member ID or reference recorded',
         } : {}),
         channel: 'POS',
         lines: result.bill.ledgerLines.map((line, index) => {
@@ -307,18 +301,6 @@ async function commitBill(req, res, next, offline) {
       }], { session });
     });
     const output = objectOf(order);
-    if (deferredWallet) {
-      res.once('finish', () => {
-        setImmediate(() => {
-          offlineWalletVerificationService.verifyOfflineWalletOrder(order._id, {
-            actorId: req.user._id,
-            ipAddress: req.ip,
-          }).catch((error) => {
-            console.error(`Offline wallet verification failed for order ${order._id}:`, error);
-          });
-        });
-      });
-    }
     return res.status(offline ? 200 : 201).json({
       success: true,
       ...(offline ? {
@@ -327,7 +309,7 @@ async function commitBill(req, res, next, offline) {
         flagged: reviewFlags.length > 0,
         reviewFlags,
         ...(deferredWallet
-          ? { walletPending: true, note: 'wallet pending' }
+          ? { walletUnverifiable: true, note: 'No member ID or reference recorded' }
           : {}),
       } : {}),
       order: output,

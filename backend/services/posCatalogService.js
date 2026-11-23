@@ -155,8 +155,6 @@ async function getCatalog(req, res, next) {
         vatCalculationOrder: settings?.vatCalculationOrder || 'DISCOUNT_THEN_VAT',
         shareholderDiscountPercent: Number(settings?.shareholderDiscountPercent ?? 5),
         allowWalletPaymentOffline: settings?.allowWalletPaymentOffline === true,
-        requireMemberIdAndReferenceForOfflineWallet:
-          settings?.requireMemberIdAndReferenceForOfflineWallet === true,
         maximumOfflineWalletAmountPerBill: Number(settings?.maximumOfflineWalletAmountPerBill ?? 2000),
         discountLimitByRole: settings?.discountLimitByRole instanceof Map
           ? Object.fromEntries(settings.discountLimitByRole)

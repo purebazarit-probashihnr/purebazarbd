@@ -2,6 +2,8 @@ const { AuditLog, Order, WalletReconciliation } = require('../models');
 const service = require('../services/walletReconciliationService');
 const offlineWalletVerificationService = require('../services/offlineWalletVerificationService');
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function statusError(message, status) {
   const error = new Error(message);
   error.status = status;
@@ -9,6 +11,11 @@ function statusError(message, status) {
 }
 
 const today = () => service.dhakaDate(new Date());
+
+function offlineWalletDateRange(date) {
+  const start = new Date(`${date}T00:00:00+06:00`);
+  return { start, end: new Date(start.getTime() + DAY_MS) };
+}
 
 async function list(req, res, next) {
   try {
@@ -63,19 +70,51 @@ async function listOfflineWalletBills(req, res, next) {
   try {
     const filter = { walletOffline: true };
     if (req.locationId) filter.outlet = req.locationId;
-    const [orders, pending, verified, mismatch, notFound, unverifiable] = await Promise.all([
-      Order.find(filter).populate('cashier', 'name').sort({ soldAt: -1, createdAt: -1 }).limit(200).lean(),
+    const dateFilter = req.query.date ? offlineWalletDateRange(req.query.date) : null;
+    const dateMatch = dateFilter ? {
+      ...filter,
+      paymentStatus: 'PAID',
+      $or: [
+        { soldAt: { $gte: dateFilter.start, $lt: dateFilter.end } },
+        {
+          soldAt: { $exists: false },
+          createdAt: { $gte: dateFilter.start, $lt: dateFilter.end },
+        },
+      ],
+    } : null;
+    const [orders, pending, verified, mismatch, notFound, unverifiable, dateSummary] = await Promise.all([
+      Order.find(filter).populate('cashier', 'name').populate('outlet', 'name')
+        .sort({ soldAt: -1, createdAt: -1 }).limit(200).lean(),
       Order.countDocuments({ ...filter, walletVerification: 'pending' }),
       Order.countDocuments({ ...filter, walletVerification: 'verified' }),
       Order.countDocuments({ ...filter, walletVerification: 'mismatch' }),
       Order.countDocuments({ ...filter, walletVerification: 'not_found' }),
       Order.countDocuments({ ...filter, walletVerification: 'unverifiable' }),
+      dateMatch ? Order.aggregate([
+        { $match: dateMatch },
+        { $unwind: '$payments' },
+        { $match: { 'payments.method': 'WALLET' } },
+        {
+          $group: {
+            _id: null,
+            count: { $sum: 1 },
+            amountCents: {
+              $sum: { $round: [{ $multiply: ['$payments.amount', 100] }, 0] },
+            },
+          },
+        },
+      ]) : Promise.resolve([]),
     ]);
     res.json({
       orders,
       totals: {
         pending, verified, mismatch, notFound, unverifiable,
         flagged: mismatch + notFound + unverifiable,
+      },
+      dateTotal: {
+        date: req.query.date || null,
+        count: dateSummary?.[0]?.count || 0,
+        amount: Math.round(Number(dateSummary?.[0]?.amountCents || 0)) / 100,
       },
     });
   } catch (error) { next(error); }

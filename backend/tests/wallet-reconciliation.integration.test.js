@@ -9,7 +9,7 @@ jest.mock('../models', () => {
   return {
     AuditLog: { create: jest.fn() },
     User: { findById: jest.fn() },
-    Order: { find: jest.fn(), countDocuments: jest.fn() },
+    Order: { find: jest.fn(), aggregate: jest.fn(), countDocuments: jest.fn() },
     Shareholder: { find: jest.fn() },
     WalletReconciliation: fakeModel(jest.requireActual('../models/WalletReconciliation'), store),
     __store: store,
@@ -49,6 +49,7 @@ describe('wallet reconciliation API', () => {
     models.__store.length = 0;
     permissions = ['finance:read', 'finance:write'];
     models.AuditLog.create.mockReset().mockResolvedValue({});
+    models.Order.aggregate.mockReset().mockResolvedValue([]);
     models.User.findById.mockImplementation(() => ({
       populate: jest.fn(async () => ({
         _id: userId,
@@ -163,6 +164,33 @@ describe('wallet reconciliation API', () => {
     expect(response.body.totals).toMatchObject({
       unverifiable: 1,
       flagged: 1,
+    });
+  });
+
+  it('totals offline wallet bills for the selected business date', async () => {
+    models.Order.find.mockReturnValue({
+      populate: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([]),
+    });
+    models.Order.countDocuments.mockResolvedValue(0);
+    models.Order.aggregate.mockResolvedValue([{ _id: null, count: 2, amountCents: 12505 }]);
+
+    const response = await request(app)
+      .get(`/api/finance/wallet-reconciliation/offline?date=${date}`)
+      .set(auth);
+
+    expect(response.status).toBe(200);
+    expect(response.body.dateTotal).toEqual({ date, count: 2, amount: 125.05 });
+    const [pipeline] = models.Order.aggregate.mock.calls[0];
+    expect(pipeline[0].$match).toMatchObject({
+      walletOffline: true,
+      paymentStatus: 'PAID',
+      $or: [
+        { soldAt: { $gte: new Date(`${date}T00:00:00+06:00`), $lt: new Date('2026-03-10T18:00:00.000Z') } },
+        expect.objectContaining({ soldAt: { $exists: false } }),
+      ],
     });
   });
 });

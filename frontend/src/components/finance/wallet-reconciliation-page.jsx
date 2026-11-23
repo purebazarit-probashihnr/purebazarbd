@@ -38,6 +38,7 @@ export default function WalletReconciliationPage() {
   const [offlineWalletTotals, setOfflineWalletTotals] = useState({
     pending: 0, verified: 0, mismatch: 0, notFound: 0, unverifiable: 0, flagged: 0,
   });
+  const [offlineWalletDateTotal, setOfflineWalletDateTotal] = useState({ count: 0, amount: 0 });
   const [offlineWalletLoading, setOfflineWalletLoading] = useState(true);
   const [verifyingWalletId, setVerifyingWalletId] = useState('');
 
@@ -59,18 +60,19 @@ export default function WalletReconciliationPage() {
     if (!token || !canRead) return undefined;
     let active = true;
     setOfflineWalletLoading(true);
-    getOfflineWalletBills(token)
+    getOfflineWalletBills(token, date)
       .then(({ data: result }) => {
         if (!active) return;
         setOfflineWallets(result.orders);
         setOfflineWalletTotals(result.totals);
+        setOfflineWalletDateTotal(result.dateTotal);
       })
       .catch((requestError) => active && setError(
         requestError.response?.data?.message || 'Unable to load offline wallet bills.',
       ))
       .finally(() => active && setOfflineWalletLoading(false));
     return () => { active = false; };
-  }, [canRead, reload, token]);
+  }, [canRead, date, reload, token]);
 
   async function runReconciliation() {
     setRunning(true);
@@ -128,10 +130,9 @@ export default function WalletReconciliationPage() {
 
   const offlineWalletColumns = [
     { key: 'orderNumber', label: 'Bill', render: (value, order) => <div><strong>{value}</strong><small className="block text-slate-500">{new Date(order.soldAt || order.createdAt).toLocaleString()}</small></div> },
-    { key: 'walletReference', label: 'Reference' },
-    { key: 'walletMemberId', label: 'Member ID' },
     { key: 'grandTotal', label: 'Amount', render: formatFinanceMoney },
     { key: 'cashier', label: 'Cashier', render: (cashier) => cashier?.name || '—' },
+    { key: 'outlet', label: 'Outlet', render: (outlet) => outlet?.name || '—' },
     {
       key: 'walletVerification',
       label: 'Verification',
@@ -206,6 +207,11 @@ export default function WalletReconciliationPage() {
       </Card>
 
       <Card title="Offline wallet bills" description="These sales are saved and included in revenue; verification never reverses a sale.">
+        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-medium text-slate-700">Total offline wallet bills · {date}</p>
+          <strong className="text-xl">{formatFinanceMoney(offlineWalletDateTotal.amount)}</strong>
+          <p className="mt-1 text-sm text-slate-500">{offlineWalletDateTotal.count} bill(s) · compare with the Probashi settlement report.</p>
+        </div>
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Card><small className="text-slate-500">Pending</small><strong className="mt-1 block text-xl">{offlineWalletTotals.pending}</strong></Card>
           <Card><small className="text-slate-500">Verified</small><strong className="mt-1 block text-xl text-green-700">{offlineWalletTotals.verified}</strong></Card>

@@ -48,17 +48,13 @@ function calculateOfflineBill(items, billDiscount, methods, settings) {
   };
 }
 
-function offlineWalletError(settings, total, memberId, reference) {
+function offlineWalletError(settings, total) {
   if (settings.allowWalletPaymentOffline !== true) {
     return 'Wallet payments require an internet connection.';
   }
   const maximum = Number(settings.maximumOfflineWalletAmountPerBill ?? 2000);
   if (Number(total) > maximum) {
     return `Offline wallet payment is limited to ৳${maximum.toFixed(2)} per bill.`;
-  }
-  if (settings.requireMemberIdAndReferenceForOfflineWallet === true
-    && (!String(memberId || '').trim() || !String(reference || '').trim())) {
-    return 'Enter both the member ID and Probashi transaction reference for an offline wallet payment.';
   }
   return '';
 }

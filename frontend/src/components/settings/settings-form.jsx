@@ -225,12 +225,6 @@ export default function SettingsForm() {
           checked={Boolean(settings.allowWalletPaymentOffline)}
           onChange={(event) => setField('allowWalletPaymentOffline', event.target.checked)}
         />
-        <ToggleField
-          label="Require member ID and reference for offline wallet"
-          description="When enabled, cashiers must enter both identifiers before completing an offline wallet bill."
-          checked={Boolean(settings.requireMemberIdAndReferenceForOfflineWallet)}
-          onChange={(event) => setField('requireMemberIdAndReferenceForOfflineWallet', event.target.checked)}
-        />
         <Input
           label="Maximum offline wallet amount per bill (৳)"
           type="number"

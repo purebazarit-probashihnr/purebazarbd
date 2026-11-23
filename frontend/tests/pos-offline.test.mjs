@@ -44,18 +44,15 @@ describe('offline POS billing and session', () => {
       allowWalletPaymentOffline: true,
       maximumOfflineWalletAmountPerBill: 2000,
     };
-    assert.match(offlineWalletError(settings, 2000.01, 'PB-1', 'TX-1'), /limited to ৳2000.00/);
+    assert.match(offlineWalletError(settings, 2000.01), /limited to ৳2000.00/);
   });
 
-  it('requires both identifiers only when the General Settings option is enabled', () => {
+  it('allows offline wallet bills without member identifiers', () => {
     const settings = {
       allowWalletPaymentOffline: true,
-      requireMemberIdAndReferenceForOfflineWallet: true,
       maximumOfflineWalletAmountPerBill: 2000,
     };
-    assert.match(offlineWalletError(settings, 100, '', 'TX-1'), /member ID and Probashi transaction reference/);
-    assert.match(offlineWalletError(settings, 100, 'PB-1', ''), /member ID and Probashi transaction reference/);
-    assert.equal(offlineWalletError({ ...settings, requireMemberIdAndReferenceForOfflineWallet: false }, 100, '', ''), '');
+    assert.equal(offlineWalletError(settings, 100), '');
   });
 
   it('uses cached wallet discount rules when offline wallet payments are enabled', () => {
