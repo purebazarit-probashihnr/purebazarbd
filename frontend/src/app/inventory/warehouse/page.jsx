@@ -13,7 +13,7 @@ import CameraBarcodeScanner from '@/components/common/camera-barcode-scanner';
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
 
 export default function WarehousePage() {
-  const { token, initialized } = useSelector((state) => state.auth);
+  const { token, user, initialized } = useSelector((state) => state.auth);
   const canRead = can(user?.permissions || [], 'stock:read');
   const [warehouse, setWarehouse] = useState(null);
   const [stock, setStock] = useState([]);
