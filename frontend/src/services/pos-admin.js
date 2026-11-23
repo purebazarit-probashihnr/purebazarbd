@@ -5,6 +5,9 @@ const outletParams = (selectedOutletId) => (
 );
 
 export const getSalesHistory = (params) => api.get('/pos/history', { params });
+export const auditPosReceiptReprint = (orderId, selectedOutletId) => api.post(
+  `/pos/${orderId}/receipt`, {}, outletParams(selectedOutletId),
+);
 export const returnPosOrder = (orderId, payload, selectedOutletId) => api.post(
   `/pos/${orderId}/return`, payload, outletParams(selectedOutletId),
 );

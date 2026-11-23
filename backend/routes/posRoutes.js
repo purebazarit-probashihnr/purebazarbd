@@ -42,6 +42,15 @@ router.get('/history', salesHistoryRead, [
     !value.from || !value.to || new Date(value.from) <= new Date(value.to)
   )).withMessage('from must be before or equal to to'),
 ], validateRequest, posHistoryController.listSalesHistory);
+router.post('/:orderId/receipt', [
+  authMiddleware,
+  authorizeMiddleware({ permissions: ['pos:read'] }),
+  enforceLocationScope.forSalesHistoryAudit,
+], [
+  param('orderId').isMongoId(),
+  query('selectedOutletId').optional({ values: 'falsy' }).isMongoId()
+    .withMessage('A valid outlet ID is required'),
+], validateRequest, posHistoryController.auditReceiptReprint);
 router.get('/shifts/current', manageShifts, posShiftController.getCurrentShift);
 router.get('/shifts/:shiftId/report', manageShifts, [
   param('shiftId').isMongoId(),

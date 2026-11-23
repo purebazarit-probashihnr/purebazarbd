@@ -760,3 +760,8 @@
 	- Files: Removed cashier identifier inputs and setting; omitted identifiers from new offline queue payloads and receipts; initialized synced wallet bills as `unverifiable`; added selected-date offline wallet amount totals and outlet detail to Finance.
 	- Decisions: Legacy queued identifier fields remain accepted for sync compatibility but are not stored or used. New offline wallet bills never trigger automatic Probashi verification. The existing offline-wallet permission and per-bill maximum remain unchanged. No database migration was run.
 	- Validation: Full backend Jest passes (53 suites, 390 tests); frontend production build passes; focused offline POS tests pass (6/6). Frontend-wide tests retain the existing i18n failure for nine untranslated strings.
+
+- [x] Receipt in Sales History and main logo
+	- Files: Added scoped and audited receipt reprints from bill rows and bill details; shared POS invoice layout and stored-order receipt builder; thermal monochrome static logo with sidebar-logo fallback.
+	- Decisions: Receipts use saved order totals and payment/line snapshots, mark all history opens `COPY - Reprint`, and audit actor, timestamp, and order. The service worker already precaches `/logo.png` for offline fallback. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 392 tests); receipt builder tests pass (4/4); frontend production build passes. Full frontend tests pass 43/44; the remaining existing i18n assertion reports nine unrelated untranslated strings.

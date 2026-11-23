@@ -7,7 +7,7 @@ jest.mock('../models', () => ({
   AuditLog: { create: jest.fn() },
   Location: { find: jest.fn(), findById: jest.fn() },
   Order: {
-    find: jest.fn(), findById: jest.fn(), findOneAndUpdate: jest.fn(),
+    find: jest.fn(), findById: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(),
   },
   Return: { create: jest.fn(), findOne: jest.fn() },
   StockMovement: { create: jest.fn() },
@@ -77,7 +77,7 @@ describe('POS history and returns API', () => {
         memberId: shareholderId,
         grandTotal: 200,
         payments: [{ method: 'CASH', amount: 200 }],
-        lines: [{ productId, quantity: 2, total: 200 }],
+        lines: [{ productId, quantity: 2, total: 200, packageUnitName: 'Box' }],
       },
       returns: [],
       movements: [],
@@ -100,6 +100,12 @@ describe('POS history and returns API', () => {
     });
     models.Order.findById.mockImplementation((id) => query(
       id.toString() === orderId.toString() ? db.order : null,
+    ));
+    models.Order.findOne.mockImplementation(({ _id, outlet }) => query(
+      _id.toString() === orderId.toString()
+      && outlet.toString() === db.order.outlet.toString()
+        ? db.order
+        : null,
     ));
     models.Order.find.mockImplementation(() => query([]));
     models.Order.findOneAndUpdate.mockImplementation(async (filter, update) => {
@@ -191,6 +197,49 @@ describe('POS history and returns API', () => {
     expect(response.status).toBe(200);
     expect(orderQuery.populate).toHaveBeenCalledWith('cashier', 'name');
     expect(response.body.orders[0].cashier).toMatchObject({ name: 'Cashier Name' });
+  });
+
+  it('audits every receipt reprint with the actor and order', async () => {
+    const first = await request(app).post(`/api/pos/${orderId}/receipt`)
+      .query({ selectedOutletId: outletId.toString() }).set(auth());
+    const second = await request(app).post(`/api/pos/${orderId}/receipt`)
+      .query({ selectedOutletId: outletId.toString() }).set(auth());
+
+    expect(first.status).toBe(200);
+    expect(first.body.order.orderNumber).toBe('POS-1');
+    expect(second.status).toBe(200);
+    expect(db.audits).toHaveLength(2);
+    expect(db.audits[0]).toMatchObject({
+      actorId: cashierId,
+      action: 'REPRINT',
+      entity: 'Order',
+      entityId: orderId,
+      metadata: { orderNumber: 'POS-1' },
+    });
+    expect(db.audits[0].createdAt).toBeInstanceOf(Date);
+  });
+
+  it('allows receipt reprints only within the user location scope', async () => {
+    db.order.outlet = otherOutletId;
+    const locked = await request(app).post(`/api/pos/${orderId}/receipt`)
+      .query({ selectedOutletId: otherOutletId.toString() }).set(auth());
+
+    expect(locked.status).toBe(404);
+    expect(models.Order.findOne).toHaveBeenLastCalledWith({
+      _id: orderId.toString(),
+      outlet: outletId,
+    });
+    expect(db.audits).toHaveLength(0);
+
+    user = {
+      ...user,
+      roleId: { name: 'Team', permissions: ['pos:read'], canViewAllLocations: true },
+    };
+    const allowed = await request(app).post(`/api/pos/${orderId}/receipt`)
+      .query({ selectedOutletId: otherOutletId.toString() }).set(auth());
+    expect(allowed.status).toBe(200);
+    expect(db.audits).toHaveLength(1);
+    expect(db.audits[0].entityId).toBe(orderId);
   });
 
   it('returns a full bill with stock restoration and exact vendor-ledger reversal', async () => {

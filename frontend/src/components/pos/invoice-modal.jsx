@@ -4,10 +4,61 @@ import { useEffect, useState } from 'react';
 import { Printer, X } from 'lucide-react';
 import { getCode39Runs } from '@/services/code39.cjs';
 import { formatLineQuantity } from '@/services/stock-units.cjs';
+import { paymentMethodLabel } from '@/services/pos-screen-utils.cjs';
 import { T } from '@/i18n/language-provider';
 import './xprinter-print.css';
 
 const money = (value) => (Math.round((Number(value) + Number.EPSILON) * 100) / 100).toFixed(2);
+
+function ReceiptLogo() {
+  const [logo, setLogo] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadLogo = (source, fallback = false) => {
+      const image = new Image();
+      image.onload = () => {
+        if (!active) return;
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('Canvas is unavailable');
+          context.drawImage(image, 0, 0);
+          const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+          for (let index = 0; index < pixels.data.length; index += 4) {
+            const luminance = (
+              pixels.data[index] * 0.299
+              + pixels.data[index + 1] * 0.587
+              + pixels.data[index + 2] * 0.114
+            );
+            const value = luminance >= 160 ? 255 : 0;
+            pixels.data[index] = value;
+            pixels.data[index + 1] = value;
+            pixels.data[index + 2] = value;
+          }
+          context.putImageData(pixels, 0, 0);
+          setLogo({ src: canvas.toDataURL('image/png'), fallback });
+        } catch {
+          setLogo({ src: source, fallback });
+        }
+      };
+      image.onerror = () => {
+        if (!active) return;
+        if (!fallback) loadLogo('/logo.png', true);
+        else setLogo(null);
+      };
+      image.src = source;
+    };
+
+    loadLogo('/brand/purebazar-logo.png');
+    return () => { active = false; };
+  }, []);
+
+  if (!logo) return null;
+  return <img className="receipt-logo-img" src={logo.src} alt="PureBazar" />;
+}
 
 function OrderBarcode({ value }) {
   let runs;
@@ -34,10 +85,11 @@ function Receipt({ receipt }) {
   return (
     <div className="receipt-sheet">
       <div className="receipt-center">
-        <div className="receipt-logo">PB</div>
+        <ReceiptLogo />
         <strong className="receipt-title"><T>{"PureBazar"}</T></strong>
         <div>{new Date(receipt.soldAt || Date.now()).toLocaleString()}</div>
         <div>Invoice: {receipt.orderNumber}</div>
+        {receipt.isReprint && <strong className="receipt-reprint">COPY - Reprint</strong>}
       </div>
       <hr />
       <table className="receipt-table">
@@ -45,7 +97,13 @@ function Receipt({ receipt }) {
         <tbody>
           {receipt.lines.map((line, index) => (
             <tr key={`${line.barcode}-${index}`}>
-              <td>{line.productName}</td>
+              <td>
+                {line.productName}
+                {Number(line.itemDiscountAmount) > 0 && <small className="receipt-line-detail">Item discount: -{money(line.itemDiscountAmount)}</small>}
+                {Number(line.billDiscountAmount) > 0 && <small className="receipt-line-detail">Bill discount: -{money(line.billDiscountAmount)}</small>}
+                {Number(line.shareholderDiscountAmount) > 0 && <small className="receipt-line-detail">Member discount: -{money(line.shareholderDiscountAmount)}</small>}
+                {Number(line.vatAmount) > 0 && <small className="receipt-line-detail">VAT: {money(line.vatAmount)}</small>}
+              </td>
               <td className="r">{formatLineQuantity(line)}</td>
               <td className="r">{money(line.mrp)}</td>
               <td className="r">{money(line.total)}</td>
@@ -59,10 +117,10 @@ function Receipt({ receipt }) {
       {Number(receipt.shareholderDiscountAmount) > 0 && <div className="receipt-row"><span><T>{"Member discount"}</T></span><span>-{money(receipt.shareholderDiscountAmount)}</span></div>}
       {Number(receipt.vatAmount) > 0 && <div className="receipt-row"><span><T>{"VAT"}</T></span><span>{money(receipt.vatAmount)}</span></div>}
       <div className="receipt-row receipt-grand"><span><T>{"TOTAL (BDT)"}</T></span><span>{money(receipt.grandTotal)}</span></div>
-      {payments.map((payment) => (
-        <div key={payment.method} className="receipt-row"><span>{payment.method}</span><span>{money(payment.amount)}</span></div>
+      {payments.map((payment, index) => (
+        <div key={`${payment.method}-${index}`} className="receipt-row"><span>{paymentMethodLabel(payment.method)}</span><span>{money(payment.amount)}</span></div>
       ))}
-      {receipt.walletOffline && (
+      {receipt.walletOffline && receipt.walletVerification === 'pending' && (
         <div className="receipt-center text-sm">Wallet verification pending</div>
       )}
       <div className="receipt-center receipt-barcode-wrap">
