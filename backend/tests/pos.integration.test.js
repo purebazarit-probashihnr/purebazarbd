@@ -24,8 +24,13 @@ jest.mock('../services/probashiWalletService', () => ({
   verifyMember: jest.fn(),
 }));
 
+jest.mock('../services/offlineWalletVerificationService', () => ({
+  verifyOfflineWalletOrder: jest.fn(),
+}));
+
 const models = require('../models');
 const walletService = require('../services/probashiWalletService');
+const offlineWalletVerifier = require('../services/offlineWalletVerificationService');
 const posRoutes = require('../routes/posRoutes');
 const errorMiddleware = require('../middlewares/errorMiddleware');
 
@@ -75,6 +80,7 @@ describe('POS checkout API', () => {
   beforeEach(() => {
     process.env.JWT_SECRET = secret;
     jest.clearAllMocks();
+    offlineWalletVerifier.verifyOfflineWalletOrder.mockResolvedValue({});
     failLedger = false;
     db = {
       orders: [],
@@ -100,6 +106,8 @@ describe('POS checkout API', () => {
     models.Settings.findOne.mockReturnValue(query({
       discountLimitByRole: { Cashier: 5, 'Super Admin': 0 },
       enabledPaymentMethods: ['Cash', 'bKash', 'Nagad', 'Card', 'Wallet'],
+      allowWalletPaymentOffline: true,
+      maximumOfflineWalletAmountPerBill: 2000,
     }));
     models.Shareholder.findById.mockReturnValue(query({
       _id: shareholderId, memberId: 'PB-001', verified: true, active: true, walletEnabled: true,
@@ -610,6 +618,38 @@ describe('POS checkout API', () => {
     expect(db.orders).toHaveLength(1);
     expect(db.ledgers).toHaveLength(1);
     expect(db.movements.filter((movement) => movement.type === 'SALE')).toHaveLength(1);
+  });
+
+  it('syncs offline wallet bills once with payment and cached wallet discount totals matching', async () => {
+    const body = {
+      offlineId: '4bf76c78-bd69-4c74-800f-1c85797e2355',
+      offlineNumber: 'OFF-65B000000000000000000003-19',
+      soldAt: '2026-10-18T09:00:00.000Z',
+      items: line(),
+      payments: [{ method: 'WALLET', amount: 95 }],
+      walletOffline: true,
+      walletMemberId: 'PB-001',
+      walletReference: 'TX-001',
+    };
+
+    const first = await request(app).post('/api/pos/offline-sync').set(auth()).send(body);
+    const duplicate = await request(app).post('/api/pos/offline-sync').set(auth()).send(body);
+
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({
+      synced: true, duplicate: false, walletPending: true, note: 'wallet pending',
+      order: {
+        walletOffline: true, walletVerification: 'pending',
+        walletMemberId: 'PB-001', walletReference: 'TX-001',
+        shareholderDiscountAmount: 5, grandTotal: 95,
+        payments: [{ method: 'WALLET', amount: 95 }],
+      },
+    });
+    expect(duplicate.status).toBe(200);
+    expect(duplicate.body).toMatchObject({ synced: true, duplicate: true });
+    expect(db.orders).toHaveLength(1);
+    expect(walletService.checkWalletBalance).not.toHaveBeenCalled();
+    expect(walletService.verifyMember).not.toHaveBeenCalled();
   });
 
   it('saves and flags an offline sale that makes outlet stock negative', async () => {

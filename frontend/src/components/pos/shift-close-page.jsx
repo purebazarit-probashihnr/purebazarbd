@@ -25,10 +25,11 @@ function Report({ shift, report }) {
   }));
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card><small className="text-slate-500"><T>{"Opening cash"}</T></small><strong className="mt-1 block text-lg">{amount(shift.openingCash)}</strong></Card>
         <Card><small className="text-slate-500"><T>{"Expected cash"}</T></small><strong className="mt-1 block text-lg">{amount(report.expectedCash)}</strong></Card>
         <Card><small className="text-slate-500"><T>{"Cash difference"}</T></small><strong className="mt-1 block text-lg">{amount(report.cashDifference)}</strong></Card>
+        <Card><small className="text-slate-500"><T>{"Offline wallet bills pending or unverified"}</T></small><strong className="mt-1 block text-lg">{report.offlineWalletPending?.count || 0} · {amount(report.offlineWalletPending?.amount || 0)}</strong></Card>
       </div>
       <Card title="Tender summary" description="Cash expected includes the opening float.">
         <Table

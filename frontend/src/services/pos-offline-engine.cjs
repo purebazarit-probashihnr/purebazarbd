@@ -2,7 +2,11 @@ const { calculateBill } = require('../../../backend/services/billEngine');
 const { linePricing } = require('../../../backend/utils/piecePricing');
 
 function calculateOfflineBill(items, billDiscount, methods, settings) {
-  if (!methods.length || methods.includes('WALLET')) {
+  if (!methods.length) {
+    throw new Error('Select at least one payment method.');
+  }
+  const wallet = methods.includes('WALLET');
+  if (wallet && (methods.length !== 1 || settings.allowWalletPaymentOffline !== true)) {
     throw new Error('Wallet payments require an internet connection.');
   }
   const firstMethod = methods[0];
@@ -29,6 +33,7 @@ function calculateOfflineBill(items, billDiscount, methods, settings) {
   const bill = calculateBill({
     items: lines.map((line) => line.engineItem),
     paymentMethod: firstMethod,
+    shareholder: wallet ? { verified: true } : null,
     billDiscount,
     settings,
   });
@@ -43,4 +48,18 @@ function calculateOfflineBill(items, billDiscount, methods, settings) {
   };
 }
 
-module.exports = { calculateOfflineBill };
+function offlineWalletError(settings, total, memberId, reference) {
+  if (settings.allowWalletPaymentOffline !== true) {
+    return 'Wallet payments require an internet connection.';
+  }
+  const maximum = Number(settings.maximumOfflineWalletAmountPerBill ?? 2000);
+  if (Number(total) > maximum) {
+    return `Offline wallet payment is limited to ৳${maximum.toFixed(2)} per bill.`;
+  }
+  if (!String(memberId || '').trim() || !String(reference || '').trim()) {
+    return 'Enter both the member ID and Probashi transaction reference for an offline wallet payment.';
+  }
+  return '';
+}
+
+module.exports = { calculateOfflineBill, offlineWalletError };

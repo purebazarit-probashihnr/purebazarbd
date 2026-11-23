@@ -5,7 +5,8 @@ import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { Badge, Button, Card, Input, Modal, Table } from '@/components/ui';
 import {
-  getWalletReconciliation, resolveWalletReconciliation, runWalletReconciliation,
+  getOfflineWalletBills, getWalletReconciliation, resolveWalletReconciliation,
+  runWalletReconciliation, verifyOfflineWalletBill,
 } from '@/services/finance';
 import { formatFinanceDate, formatFinanceMoney, localDateInput } from './finance-utils';
 import { T } from '@/i18n/language-provider';
@@ -33,6 +34,12 @@ export default function WalletReconciliationPage() {
   const [resolving, setResolving] = useState(null);
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [offlineWallets, setOfflineWallets] = useState([]);
+  const [offlineWalletTotals, setOfflineWalletTotals] = useState({
+    pending: 0, verified: 0, mismatch: 0, notFound: 0, flagged: 0,
+  });
+  const [offlineWalletLoading, setOfflineWalletLoading] = useState(true);
+  const [verifyingWalletId, setVerifyingWalletId] = useState('');
 
   useEffect(() => {
     if (!token || !canRead) return undefined;
@@ -47,6 +54,23 @@ export default function WalletReconciliationPage() {
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, [canRead, date, reload, token]);
+
+  useEffect(() => {
+    if (!token || !canRead) return undefined;
+    let active = true;
+    setOfflineWalletLoading(true);
+    getOfflineWalletBills(token)
+      .then(({ data: result }) => {
+        if (!active) return;
+        setOfflineWallets(result.orders);
+        setOfflineWalletTotals(result.totals);
+      })
+      .catch((requestError) => active && setError(
+        requestError.response?.data?.message || 'Unable to load offline wallet bills.',
+      ))
+      .finally(() => active && setOfflineWalletLoading(false));
+    return () => { active = false; };
+  }, [canRead, reload, token]);
 
   async function runReconciliation() {
     setRunning(true);
@@ -81,6 +105,56 @@ export default function WalletReconciliationPage() {
       setSaving(false);
     }
   }
+
+  async function verifyNow(order) {
+    setVerifyingWalletId(order._id);
+    setError('');
+    setNotice('');
+    try {
+      const { data: result } = await verifyOfflineWalletBill(
+        token, order._id, String(order.outlet?._id || order.outlet || ''),
+      );
+      setOfflineWallets((current) => current.map((item) => (
+        item._id === order._id ? result.order : item
+      )));
+      setNotice(`Wallet bill ${order.orderNumber} verification: ${result.order.walletVerification}.`);
+      setReload((value) => value + 1);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to verify this offline wallet bill.');
+    } finally {
+      setVerifyingWalletId('');
+    }
+  }
+
+  const offlineWalletColumns = [
+    { key: 'orderNumber', label: 'Bill', render: (value, order) => <div><strong>{value}</strong><small className="block text-slate-500">{new Date(order.soldAt || order.createdAt).toLocaleString()}</small></div> },
+    { key: 'walletReference', label: 'Reference' },
+    { key: 'walletMemberId', label: 'Member ID' },
+    { key: 'grandTotal', label: 'Amount', render: formatFinanceMoney },
+    { key: 'cashier', label: 'Cashier', render: (cashier) => cashier?.name || '—' },
+    {
+      key: 'walletVerification',
+      label: 'Verification',
+      render: (value, order) => (
+        <div>
+          <Badge tone={value === 'verified' ? 'success' : value === 'pending' ? 'warning' : 'danger'}>
+            {value || 'pending'}
+          </Badge>
+          {order.walletVerificationReason && <small className="mt-1 block max-w-64 text-slate-600">{order.walletVerificationReason}</small>}
+        </div>
+      ),
+    },
+    {
+      key: 'action',
+      label: 'Action',
+      render: (_, order) => (
+        <Button size="sm" variant="secondary" disabled={!canWrite || verifyingWalletId === order._id}
+          onClick={() => verifyNow(order)}>
+          {verifyingWalletId === order._id ? 'Verifying…' : 'Verify now'}
+        </Button>
+      ),
+    },
+  ];
 
   const columns = [
     { key: 'orderNumber', label: 'Wallet bill' },
@@ -129,6 +203,23 @@ export default function WalletReconciliationPage() {
           <Input label="Business date" name="date" type="date" max={localDateInput()} value={date} onChange={(event) => setDate(event.target.value)} />
         </div>
         {!canWrite && <p className="mt-3 text-sm text-slate-500"><T>{"Read-only access. Finance write permission is required to run or resolve reconciliation records."}</T></p>}
+      </Card>
+
+      <Card title="Offline wallet bills" description="These sales are saved and included in revenue; verification never reverses a sale.">
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Card><small className="text-slate-500">Pending</small><strong className="mt-1 block text-xl">{offlineWalletTotals.pending}</strong></Card>
+          <Card><small className="text-slate-500">Verified</small><strong className="mt-1 block text-xl text-green-700">{offlineWalletTotals.verified}</strong></Card>
+          <Card><small className="text-slate-500">Mismatch</small><strong className="mt-1 block text-xl text-red-700">{offlineWalletTotals.mismatch}</strong></Card>
+          <Card><small className="text-slate-500">Not found</small><strong className="mt-1 block text-xl text-red-700">{offlineWalletTotals.notFound}</strong></Card>
+        </div>
+        {offlineWalletTotals.flagged > 0 && (
+          <p role="status" className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {offlineWalletTotals.flagged} offline wallet bill(s) need attention.
+          </p>
+        )}
+        {offlineWalletLoading ? <p role="status">Loading offline wallet bills…</p> : (
+          <Table columns={offlineWalletColumns} rows={offlineWallets} rowKey="_id" emptyMessage="No offline wallet bills." />
+        )}
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -24,6 +24,8 @@ jest.mock('../models', () => ({
       enabledVendorPayoutMethods: ['Cash', 'Bank', 'bKash', 'Nagad'],
       commissionEnabled: false,
       vendorWalletPayoutEnabled: false,
+      allowWalletPaymentOffline: false,
+      maximumOfflineWalletAmountPerBill: 2000,
       outlets: [],
     }),
   })), { findOne: jest.fn(), findOneAndUpdate: jest.fn() }),
@@ -75,6 +77,8 @@ function settingsDocument(fields = {}) {
     enabledVendorPayoutMethods: ['Cash', 'Bank', 'bKash', 'Nagad'],
     commissionEnabled: false,
     vendorWalletPayoutEnabled: false,
+    allowWalletPaymentOffline: false,
+    maximumOfflineWalletAmountPerBill: 2000,
     outlets: [],
     ...fields,
   };
@@ -146,6 +150,28 @@ describe('settings and audit endpoints', () => {
     });
   });
 
+  it('saves offline wallet controls and rejects a negative maximum', async () => {
+    const updated = settingsDocument({
+      allowWalletPaymentOffline: true,
+      maximumOfflineWalletAmountPerBill: 1500,
+    });
+    Settings.findOneAndUpdate.mockResolvedValue(updated);
+    const response = await request(app).put('/api/settings').set(auth).send({
+      allowWalletPaymentOffline: true,
+      maximumOfflineWalletAmountPerBill: 1500,
+    });
+    const invalid = await request(app).put('/api/settings').set(auth).send({
+      maximumOfflineWalletAmountPerBill: -1,
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.settings).toMatchObject({
+      allowWalletPaymentOffline: true,
+      maximumOfflineWalletAmountPerBill: 1500,
+    });
+    expect(invalid.status).toBe(400);
+  });
+
   it('returns defaults and protects settings from unauthenticated or non-admin access', async () => {
     Settings.findOne.mockReturnValue(chain(null));
     const defaults = await request(app).get('/api/settings').set(auth);
@@ -167,6 +193,8 @@ describe('settings and audit endpoints', () => {
       vatEnabled: false,
       commissionEnabled: false,
       vendorWalletPayoutEnabled: false,
+      allowWalletPaymentOffline: false,
+      maximumOfflineWalletAmountPerBill: 2000,
     });
     expect(defaults.body.settings.probashiStatus).toBe('NotConfigured');
     expect(unauthenticated.status).toBe(401);

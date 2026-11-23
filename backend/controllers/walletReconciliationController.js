@@ -1,5 +1,6 @@
-const { AuditLog, WalletReconciliation } = require('../models');
+const { AuditLog, Order, WalletReconciliation } = require('../models');
 const service = require('../services/walletReconciliationService');
+const offlineWalletVerificationService = require('../services/offlineWalletVerificationService');
 
 function statusError(message, status) {
   const error = new Error(message);
@@ -58,4 +59,41 @@ async function resolve(req, res, next) {
   } catch (error) { next(error); }
 }
 
-module.exports = { list, run, resolve };
+async function listOfflineWalletBills(req, res, next) {
+  try {
+    const filter = { walletOffline: true };
+    if (req.locationId) filter.outlet = req.locationId;
+    const [orders, pending, verified, mismatch, notFound] = await Promise.all([
+      Order.find(filter).populate('cashier', 'name').sort({ soldAt: -1, createdAt: -1 }).limit(200).lean(),
+      Order.countDocuments({ ...filter, walletVerification: 'pending' }),
+      Order.countDocuments({ ...filter, walletVerification: 'verified' }),
+      Order.countDocuments({ ...filter, walletVerification: 'mismatch' }),
+      Order.countDocuments({ ...filter, walletVerification: 'not_found' }),
+    ]);
+    res.json({
+      orders,
+      totals: {
+        pending, verified, mismatch, notFound,
+        flagged: mismatch + notFound,
+      },
+    });
+  } catch (error) { next(error); }
+}
+
+async function verifyOfflineWalletBill(req, res, next) {
+  try {
+    const filter = { _id: req.params.id, walletOffline: true };
+    if (req.locationId) filter.outlet = req.locationId;
+    const order = await Order.findOne(filter).select('_id');
+    if (!order) throw statusError('Offline wallet bill was not found', 404);
+    const updated = await offlineWalletVerificationService.verifyOfflineWalletOrder(order._id, {
+      actorId: req.user._id,
+      ipAddress: req.ip,
+    });
+    res.json({ order: updated });
+  } catch (error) { next(error); }
+}
+
+module.exports = {
+  list, listOfflineWalletBills, resolve, run, verifyOfflineWalletBill,
+};

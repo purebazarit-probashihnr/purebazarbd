@@ -114,6 +114,11 @@ enforceLocationScope.forAccountingRead = createLocationScopeMiddleware({
   allLocationsOnRead: true,
   locationQueryParam: 'locationId',
 });
+enforceLocationScope.forAccountingWrite = createLocationScopeMiddleware({
+  allLocationsOnRead: true,
+  locationQueryParam: 'locationId',
+  allowLocationSelectionOnWrite: true,
+});
 enforceLocationScope.forExpenseWrite = createLocationScopeMiddleware({
   locationQueryParam: 'locationId',
   allowLocationSelectionOnWrite: true,

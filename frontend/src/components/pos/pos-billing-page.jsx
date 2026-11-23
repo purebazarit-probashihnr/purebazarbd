@@ -156,6 +156,13 @@ export default function PosBillingPage() {
               total={billing.bill?.grandTotal || 0}
               onMethods={billing.changeMethods}
               onAmount={billing.updateAmount}
+              walletMemberId={billing.walletMemberId}
+              walletReference={billing.walletReference}
+              onWalletMemberId={billing.setWalletMemberId}
+              onWalletReference={billing.setWalletReference}
+              offlineWalletAllowed={billing.offlineWalletAllowed}
+              offlineWalletMaximum={billing.offlineWalletMaximum}
+              walletError={billing.offlineWalletMessage}
               offline={!online}
             />
           </div>

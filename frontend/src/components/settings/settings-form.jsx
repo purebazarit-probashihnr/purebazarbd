@@ -219,6 +219,20 @@ export default function SettingsForm() {
           checked={Boolean(settings.lockCashierToPos)}
           onChange={(event) => setField('lockCashierToPos', event.target.checked)}
         />
+        <ToggleField
+          label="Allow wallet payment offline"
+          description="Wallet payments are stored locally and verified with Probashi after synchronization."
+          checked={Boolean(settings.allowWalletPaymentOffline)}
+          onChange={(event) => setField('allowWalletPaymentOffline', event.target.checked)}
+        />
+        <Input
+          label="Maximum offline wallet amount per bill (৳)"
+          type="number"
+          min="0"
+          step="0.01"
+          value={settings.maximumOfflineWalletAmountPerBill}
+          onChange={(event) => setField('maximumOfflineWalletAmountPerBill', Number(event.target.value))}
+        />
       </SettingsSection>
 
       <SettingsSection title="Payments and receipt" description="Choose accepted checkout methods and configure the receipt layout.">

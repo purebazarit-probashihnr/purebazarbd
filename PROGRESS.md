@@ -743,5 +743,10 @@
 
 - [x] O Offline POS
 	- Files: POS service worker and app shell; IndexedDB catalog/offline bill queue; shared-engine offline billing and receipts; offline-session and POS-lock settings; idempotent backend sync, catalog snapshots, and sale-time cashier shift totals; focused backend and frontend tests.
-	- Decisions: Offline bills use client UUIDs, per-outlet reserved number ranges, and FIFO sync; sync retries return the existing order, while sold bills that overdraw stock are saved with review flags and matching stock/vendor ledger entries. Wallet/Probashi payments require connectivity; offline sessions cache no passwords and expire within the configured maximum of 24 hours. No database migration was run.
+	- Decisions: Offline bills use client UUIDs, per-outlet reserved number ranges, and FIFO sync; sync retries return the existing order, while sold bills that overdraw stock are saved with review flags and matching stock/vendor ledger entries. Offline wallet payment requires the General Settings flag; offline sessions cache no passwords and expire within the configured maximum of 24 hours. No database migration was run.
 	- Validation: Backend Jest passes (52 suites, 379 tests); frontend production build passes. Frontend tests pass 36/37; the remaining existing i18n assertion reports nine unrelated untranslated strings.
+
+- [x] O1 Offline wallet payment with deferred verification
+	- Files: Offline wallet settings and cached catalog controls; offline POS payment, receipt, and sync result; wallet verification fields and async verifier; audited Finance reconciliation list/retry; cashier shift pending count and amount; focused backend and frontend tests.
+	- Decisions: Offline wallet payments remain full-tender bills, use cached wallet discount rules and a configurable per-bill maximum, and require a typed member ID and Probashi reference. Sync saves the order without a Probashi request, then starts verification after the response; unavailable checks stay pending for manager retry. Verification never reverses sales and does not change revenue or bill pricing. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 385 tests); frontend production build passes; focused offline POS tests pass (5/5). Frontend tests pass 38/39; the remaining existing i18n assertion reports nine unrelated untranslated strings.

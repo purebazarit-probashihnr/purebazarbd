@@ -33,6 +33,17 @@ export const resolveWalletReconciliation = (token, id, reason) => api.post(
   authConfig(token),
 );
 
+export const getOfflineWalletBills = (token, locationId) => api.get(
+  '/finance/wallet-reconciliation/offline',
+  withParams(token, { locationId }),
+);
+
+export const verifyOfflineWalletBill = (token, id, locationId) => api.post(
+  `/finance/wallet-reconciliation/offline/${id}/verify`,
+  { locationId },
+  authConfig(token),
+);
+
 export const getExpenseCategories = (token) => api.get(
   '/finance/expense-categories',
   authConfig(token),

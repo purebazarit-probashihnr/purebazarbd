@@ -15,6 +15,8 @@ const money = (value) => (Number(value) || 0).toFixed(2);
 
 export default function PaymentPanel({
   methods, amounts, total, onMethods, onAmount, offline = false,
+  walletMemberId = '', walletReference = '', onWalletMemberId, onWalletReference,
+  offlineWalletAllowed = false, offlineWalletMaximum = 2000, walletError = '',
 }) {
   const selected = methods.includes('WALLET') ? ['WALLET'] : methods;
   const paid = selected.reduce((sum, method) => sum + (Number(amounts[method]) || 0), 0);
@@ -40,13 +42,22 @@ export default function PaymentPanel({
         ))}
       </div>
       <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm">
-        <input type="checkbox" checked={selected.includes('WALLET')} disabled={offline} onChange={(event) => toggle('WALLET', event.target.checked)} />
+        <input type="checkbox" checked={selected.includes('WALLET')} disabled={offline && !offlineWalletAllowed} onChange={(event) => toggle('WALLET', event.target.checked)} />
         <WalletCards size={17} /> Full wallet payment (no split)
       </label>
-      {offline && <p role="status" className="mt-2 text-sm text-amber-800">Wallet and Probashi-dependent payments need an internet connection.</p>}
+      {offline && !offlineWalletAllowed && <p role="status" className="mt-2 text-sm text-amber-800">Wallet payments require an internet connection.</p>}
       {selected.includes('WALLET') ? (
         <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
-          <p className="text-emerald-800">5% wallet discount applied. Wallet pays ৳{money(total)}.</p>
+          <p className="text-emerald-800">Wallet pays ৳{money(total)}.</p>
+          {offline && offlineWalletAllowed && (
+            <div className="mt-3 space-y-3">
+              <p role="status" className="text-amber-800">Wallet payment will be verified when internet returns.</p>
+              <Input label="Member ID" value={walletMemberId} onChange={(event) => onWalletMemberId(event.target.value)} required autoComplete="off" />
+              <Input label="Probashi transaction reference" value={walletReference} onChange={(event) => onWalletReference(event.target.value)} required autoComplete="off" />
+              {Number(total) > Number(offlineWalletMaximum) && <p role="alert" className="text-red-700">Offline wallet payment is limited to ৳{money(offlineWalletMaximum)} per bill.</p>}
+              {walletError && Number(total) <= Number(offlineWalletMaximum) && <p role="alert" className="text-red-700">{walletError}</p>}
+            </div>
+          )}
         </div>
       ) : (
         <div className="mt-3 space-y-3">

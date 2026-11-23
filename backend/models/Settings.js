@@ -25,6 +25,8 @@ const settingsSchema = new mongoose.Schema({
   vendorTerms: { type: [vendorTermSchema], default: [] },
   offlineSessionHours: { type: Number, min: 1, max: 24, default: 24 },
   lockCashierToPos: { type: Boolean, default: false },
+  allowWalletPaymentOffline: { type: Boolean, default: false },
+  maximumOfflineWalletAmountPerBill: { type: Number, min: 0, default: 2000 },
   offlineNumberCounters: { type: Map, of: Number, default: {} },
   probashiStatus: { type: String, enum: ['NotConfigured', 'Active', 'Inactive'], default: 'NotConfigured' },
   vendorSettlementCyclePerMonth: { type: Number, enum: [1, 2], default: 1 },

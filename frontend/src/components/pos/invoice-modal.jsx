@@ -62,6 +62,12 @@ function Receipt({ receipt }) {
       {payments.map((payment) => (
         <div key={payment.method} className="receipt-row"><span>{payment.method}</span><span>{money(payment.amount)}</span></div>
       ))}
+      {receipt.walletOffline && (
+        <>
+          <div className="receipt-row"><span>Wallet reference</span><span>{receipt.walletReference}</span></div>
+          <div className="receipt-center text-sm">Wallet verification pending</div>
+        </>
+      )}
       <div className="receipt-center receipt-barcode-wrap">
         <OrderBarcode value={receipt.orderNumber} />
         <div>{receipt.orderNumber}</div>

@@ -29,7 +29,10 @@ function createOfflineReceipt(bill, queuedBill, user, outletId, payments) {
     vatAmount: bill.vatAmount,
     grandTotal: bill.grandTotal,
     payments,
-    memberId: null,
+    memberId: queuedBill.payload.walletMemberId || null,
+    walletOffline: queuedBill.payload.walletOffline === true,
+    walletReference: queuedBill.payload.walletReference || null,
+    walletVerification: queuedBill.payload.walletOffline ? 'pending' : null,
   };
 }
 

@@ -35,6 +35,9 @@ const billSchema = Joi.object({
   outletId: Joi.string().hex().length(24),
   offlineId: Joi.string().trim().min(1).max(120),
   offlineNumber: Joi.string().trim().min(1).max(120),
+  walletOffline: Joi.boolean(),
+  walletMemberId: Joi.string().trim().min(1).max(100),
+  walletReference: Joi.string().trim().min(1).max(120),
   soldAt: Joi.date().iso(),
 }).unknown(false);
 
@@ -160,6 +163,11 @@ function receiptData(order) {
     grandTotal: order.grandTotal,
     payments: order.payments,
     memberId: order.memberId || null,
+    walletOffline: order.walletOffline === true,
+    walletMemberId: order.walletMemberId || null,
+    walletReference: order.walletReference || null,
+    walletVerification: order.walletVerification || null,
+    walletVerificationReason: order.walletVerificationReason || null,
   };
 }
 

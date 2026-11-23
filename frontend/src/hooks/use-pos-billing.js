@@ -10,7 +10,7 @@ import { hasStockProblem } from '@/services/pos-cart-utils.cjs';
 import offlineEngine from '@/services/pos-offline-engine.cjs';
 import offlineReceipt from '@/services/pos-offline-receipt.cjs';
 
-const { calculateOfflineBill } = offlineEngine;
+const { calculateOfflineBill, offlineWalletError } = offlineEngine;
 const { createOfflineReceipt } = offlineReceipt;
 const { createPreviewPayload, paymentTotalMatches } = billingUtils;
 
@@ -30,6 +30,8 @@ export default function usePosBilling({
 }) {
   const [methods, setMethods] = useState(['CASH']);
   const [amounts, setAmounts] = useState({});
+  const [walletMemberId, setWalletMemberId] = useState('');
+  const [walletReference, setWalletReference] = useState('');
   const [bill, setBill] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
@@ -44,6 +46,15 @@ export default function usePosBilling({
   const latestPreview = useRef(0);
   const selectedMethods = methods.includes('WALLET') ? ['WALLET'] : methods;
   const singleMethod = selectedMethods.length === 1 ? selectedMethods[0] : null;
+  const offlineWalletAllowed = !online && catalog?.settings?.allowWalletPaymentOffline === true;
+  const offlineWalletMessage = !online && selectedMethods.includes('WALLET')
+    ? offlineWalletError(
+      catalog?.settings || {},
+      bill?.grandTotal || 0,
+      walletMemberId,
+      walletReference,
+    )
+    : '';
   let payload;
   let formError = '';
   try {
@@ -95,12 +106,12 @@ export default function usePosBilling({
   }, [catalog, hasOutletSelection, online, previewKey, selectedOutletId, items.length, user?.role]);
 
   useEffect(() => {
-    if (!online && methods.includes('WALLET')) {
+    if (!online && methods.includes('WALLET') && !offlineWalletAllowed) {
       setMethods(['CASH']);
       setAmounts({});
       setCheckoutError('Wallet and Probashi-dependent payments need an internet connection.');
     }
-  }, [methods, online]);
+  }, [methods, online, offlineWalletAllowed]);
 
   useEffect(() => {
     if (singleMethod && singleMethod !== 'WALLET' && bill) {
@@ -126,6 +137,8 @@ export default function usePosBilling({
     setBillDiscount(null);
     setMethods(['CASH']);
     setAmounts({});
+    setWalletMemberId('');
+    setWalletReference('');
     setDiscountApproved(false);
     setBill(null);
     setCheckoutError('');
@@ -142,9 +155,7 @@ export default function usePosBilling({
         amount: method === 'WALLET' ? bill.grandTotal : Number(amounts[method]),
       }));
       if (!online) {
-        if (selectedMethods.includes('WALLET')) {
-          throw new Error('Wallet and Probashi-dependent payments need an internet connection.');
-        }
+        if (offlineWalletMessage) throw new Error(offlineWalletMessage);
         const soldAt = new Date().toISOString();
         const queued = await queueOfflineBill({
           offlineId: createOfflineUuid(),
@@ -152,6 +163,11 @@ export default function usePosBilling({
             ...payload,
             payments,
             soldAt,
+            ...(selectedMethods.includes('WALLET') ? {
+              walletOffline: true,
+              walletMemberId: walletMemberId.trim(),
+              walletReference: walletReference.trim(),
+            } : {}),
             ...(canApprove && discountApproved ? { discountApproved: true } : {}),
           },
           stockDeductions: bill.lines.map(({ item, pricing }) => ({
@@ -223,10 +239,14 @@ export default function usePosBilling({
   const approvalReady = !online || !bill?.discountApprovalRequired || (canApprove && discountApproved);
   const canCheckoutNow = canWrite && items.length > 0 && bill && !previewLoading && !previewError
     && !formError && !checkoutLoading && selectedMethods.length > 0
-    && paymentsMatch && approvalReady && (!online || !hasStockProblem(items)) && hasOutletSelection;
+    && paymentsMatch && !offlineWalletMessage && approvalReady
+    && (!online || !hasStockProblem(items)) && hasOutletSelection;
 
   return {
-    methods, selectedMethods, amounts, bill, previewLoading, previewError, discountApproved,
+    methods, selectedMethods, amounts, walletMemberId, setWalletMemberId,
+    walletReference, setWalletReference, offlineWalletAllowed,
+    offlineWalletMaximum: Number(catalog?.settings?.maximumOfflineWalletAmountPerBill ?? 2000),
+    offlineWalletMessage, bill, previewLoading, previewError, discountApproved,
     setDiscountApproved, checkoutLoading, checkoutError, setCheckoutError, successMessage,
     setSuccessMessage, heldOpen, setHeldOpen, holdOpen, setHoldOpen, receipt, setReceipt,
     held, discardHeld, payload, formError, changeMethods, updateAmount, checkout, resetCart,

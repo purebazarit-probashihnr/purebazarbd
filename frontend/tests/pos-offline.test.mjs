@@ -3,7 +3,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 const require = createRequire(import.meta.url);
-const { calculateOfflineBill } = require('../src/services/pos-offline-engine.cjs');
+const {
+  calculateOfflineBill, offlineWalletError,
+} = require('../src/services/pos-offline-engine.cjs');
 const { offlineSessionIsValid } = require('../src/services/offline-session-utils.cjs');
 
 describe('offline POS billing and session', () => {
@@ -32,7 +34,39 @@ describe('offline POS billing and session', () => {
   });
 
   it('blocks wallet sales from the offline bill engine', () => {
-    assert.throws(() => calculateOfflineBill([], null, ['WALLET'], {}), /internet connection/);
+    assert.throws(() => calculateOfflineBill([], null, ['WALLET'], {
+      allowWalletPaymentOffline: false,
+    }), /internet connection/);
+  });
+
+  it('refuses offline wallet bills over the configured maximum and requires both identifiers', () => {
+    const settings = {
+      allowWalletPaymentOffline: true,
+      maximumOfflineWalletAmountPerBill: 2000,
+    };
+    assert.match(offlineWalletError(settings, 2000.01, 'PB-1', 'TX-1'), /limited to ৳2000.00/);
+    assert.match(offlineWalletError(settings, 100, '', 'TX-1'), /member ID and Probashi transaction reference/);
+  });
+
+  it('uses cached wallet discount rules when offline wallet payments are enabled', () => {
+    const bill = calculateOfflineBill([{
+      productId: 'product-1',
+      name: 'Tea',
+      ownerType: 'VENDOR',
+      mrp: 100,
+      vendorPrice: 55,
+      quantity: 1,
+      unit: 'PACKAGE',
+      vatApplicable: false,
+    }], null, ['WALLET'], {
+      allowWalletPaymentOffline: true,
+      shareholderDiscountPercent: 0,
+      discountLimitByRole: { Cashier: 5 },
+      role: 'Cashier',
+    });
+
+    assert.equal(bill.grandTotal, 100);
+    assert.equal(bill.shareholderDiscountAmount, 0);
   });
 
   it('expires offline sessions at the configured limit and never after 24 hours', () => {
