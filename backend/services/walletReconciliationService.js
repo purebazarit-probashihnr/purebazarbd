@@ -53,6 +53,7 @@ async function reconcileDate(date) {
   const { start, end } = dayRange(date);
   const orders = await Order.find({
     'payments.method': 'WALLET',
+    walletOffline: { $ne: true },
     paymentStatus: 'PAID',
     $or: [
       { soldAt: { $gte: start, $lt: end } },
@@ -99,7 +100,17 @@ async function reconcileDate(date) {
 }
 
 async function summarize(date) {
-  const records = await WalletReconciliation.find({ businessDate: date }).lean();
+  const allRecords = await WalletReconciliation.find({ businessDate: date }).lean();
+  const offlineOrders = allRecords.length
+    ? await Order.find({
+      _id: { $in: allRecords.map((record) => record.orderId) },
+      walletOffline: true,
+    }).lean()
+    : [];
+  const offlineOrderIds = new Set(offlineOrders
+    .filter((order) => order.walletOffline === true)
+    .map((order) => String(order._id)));
+  const records = allRecords.filter((record) => !offlineOrderIds.has(String(record.orderId)));
   const unresolved = records.filter((r) => r.status === 'Mismatch' && !r.resolved).length;
   return {
     date,

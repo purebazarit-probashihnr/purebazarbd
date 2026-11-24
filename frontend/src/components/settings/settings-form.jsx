@@ -221,7 +221,7 @@ export default function SettingsForm() {
         />
         <ToggleField
           label="Allow wallet payment offline"
-          description="Wallet payments are stored locally and verified with Probashi after synchronization."
+          description="Allow wallet payments to be recorded while offline."
           checked={Boolean(settings.allowWalletPaymentOffline)}
           onChange={(event) => setField('allowWalletPaymentOffline', event.target.checked)}
         />

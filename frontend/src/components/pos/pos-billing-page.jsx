@@ -203,8 +203,6 @@ export default function PosBillingPage() {
               onMethods={billing.changeMethods}
               onAmount={billing.updateAmount}
               offlineWalletAllowed={billing.offlineWalletAllowed}
-              offlineWalletMaximum={billing.offlineWalletMaximum}
-              walletError={billing.offlineWalletMessage}
               offline={!online}
             />
           </div>
@@ -221,7 +219,7 @@ export default function PosBillingPage() {
             previewError={billing.previewError}
             onCheckout={billing.checkout}
             checkoutLoading={billing.checkoutLoading}
-            checkoutError={billing.checkoutError}
+            checkoutError={billing.checkoutError || billing.offlineWalletMessage}
             canCheckout={billing.canCheckout}
           />
         </div>

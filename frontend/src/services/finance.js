@@ -38,12 +38,6 @@ export const getOfflineWalletBills = (token, date) => api.get(
   withParams(token, { date }),
 );
 
-export const verifyOfflineWalletBill = (token, id, locationId) => api.post(
-  `/finance/wallet-reconciliation/offline/${id}/verify`,
-  { locationId },
-  authConfig(token),
-);
-
 export const getExpenseCategories = (token) => api.get(
   '/finance/expense-categories',
   authConfig(token),

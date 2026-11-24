@@ -1,6 +1,10 @@
 function buildHistoryReceipt(order) {
+  const receipt = { ...order };
+  delete receipt.walletVerification;
+  delete receipt.walletVerificationReason;
+  delete receipt.walletVerificationCheckedAt;
   return {
-    ...order,
+    ...receipt,
     soldAt: order.soldAt || order.createdAt,
     isReprint: true,
     lines: (order.lines || []).map((line) => ({ ...line })),

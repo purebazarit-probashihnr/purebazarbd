@@ -78,6 +78,11 @@ describe('wallet reconciliation API', () => {
 
     const res = await run();
     expect(res.status).toBe(200);
+    expect(models.Order.find).toHaveBeenCalledWith(expect.objectContaining({
+      'payments.method': 'WALLET',
+      walletOffline: { $ne: true },
+      paymentStatus: 'PAID',
+    }));
     expect(byOrder(res, 'B1')).toMatchObject({ status: 'Matched', probashiTransactionId: 'T1' });
     expect(byOrder(res, 'B2')).toMatchObject({ status: 'Mismatch', mismatchType: 'AMOUNT_MISMATCH', probashiAmount: 250 });
     expect(byOrder(res, 'B3')).toMatchObject({ status: 'Mismatch', mismatchType: 'MISSING' });
@@ -134,41 +139,93 @@ describe('wallet reconciliation API', () => {
     expect((await request(app).post('/api/finance/wallet-reconciliation/run').set(auth).send({ date: '2999-01-01' })).status).toBe(400);
   });
 
-  it('includes and counts unverifiable offline wallet bills', async () => {
+  it('lists offline wallet bills without verification status fields', async () => {
     const order = {
       _id: id(),
-      orderNumber: 'OFF-UNVERIFIABLE',
+      orderNumber: 'OFF-WALLET',
+      soldAt: new Date(`${date}T10:00:00+06:00`),
+      createdAt: new Date(`${date}T10:00:00+06:00`),
+      grandTotal: 125,
+      payments: [{ method: 'WALLET', amount: 125 }],
+      cashier: { name: 'Cashier' },
+      outlet: { name: 'Outlet' },
       walletOffline: true,
       walletVerification: 'unverifiable',
       walletVerificationReason: 'No member ID or reference recorded',
     };
-    models.Order.find.mockReturnValue({
+    const query = {
+      select: jest.fn().mockReturnThis(),
       populate: jest.fn().mockReturnThis(),
       sort: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
-      lean: jest.fn().mockResolvedValue([order]),
-    });
-    models.Order.countDocuments.mockImplementation((filter) => Promise.resolve(
-      filter.walletVerification === 'unverifiable' ? 1 : 0,
-    ));
+      lean: jest.fn().mockResolvedValue([{
+        _id: order._id,
+        orderNumber: order.orderNumber,
+        soldAt: order.soldAt,
+        createdAt: order.createdAt,
+        grandTotal: order.grandTotal,
+        payments: order.payments,
+        cashier: order.cashier,
+        outlet: order.outlet,
+      }]),
+    };
+    models.Order.find.mockReturnValue(query);
 
-    const response = await request(app).get('/api/finance/wallet-reconciliation/offline').set(auth);
+    const response = await request(app)
+      .get(`/api/finance/wallet-reconciliation/offline?date=${date}`).set(auth);
 
     expect(response.status).toBe(200);
     expect(response.body.orders).toHaveLength(1);
     expect(response.body.orders[0]).toMatchObject({
-      orderNumber: 'OFF-UNVERIFIABLE',
-      walletVerification: 'unverifiable',
-      walletVerificationReason: 'No member ID or reference recorded',
+      orderNumber: 'OFF-WALLET',
+      grandTotal: 125,
+      payments: [{ method: 'WALLET', amount: 125 }],
     });
-    expect(response.body.totals).toMatchObject({
-      unverifiable: 1,
-      flagged: 1,
+    expect(response.body.orders[0]).not.toHaveProperty('walletVerification');
+    expect(response.body).not.toHaveProperty('totals');
+    expect(query.select).toHaveBeenCalledWith(
+      'orderNumber soldAt createdAt grandTotal payments cashier outlet',
+    );
+    expect(models.Order.find).toHaveBeenCalledWith(expect.objectContaining({
+      walletOffline: true,
+      paymentStatus: 'PAID',
+    }));
+    expect(response.body.dateTotal).toMatchObject({ date, amount: 0 });
+  });
+
+  it('does not expose manual verification for offline wallet bills', async () => {
+    const response = await request(app)
+      .post(`/api/finance/wallet-reconciliation/offline/${id()}/verify`).set(auth);
+
+    expect(response.status).toBe(404);
+    expect(probashi.getTransactionReport).not.toHaveBeenCalled();
+  });
+
+  it('hides legacy offline wallet rows from online reconciliation results', async () => {
+    const offlineOrder = { ...wallet('OFF-OLD', 125), walletOffline: true };
+    await models.WalletReconciliation.create({
+      businessDate: date,
+      orderId: offlineOrder._id,
+      orderNumber: offlineOrder.orderNumber,
+      memberId: member.memberId,
+      amount: 125,
     });
+    models.Order.find.mockImplementation((filter) => ({
+      lean: async () => (filter.walletOffline ? [offlineOrder] : []),
+    }));
+
+    const response = await request(app)
+      .get(`/api/finance/wallet-reconciliation?date=${date}`).set(auth);
+
+    expect(response.status).toBe(200);
+    expect(response.body.records).toEqual([]);
+    expect(response.body.totals).toMatchObject({ matched: 0, mismatch: 0, pending: 0 });
+    expect(probashi.getTransactionReport).not.toHaveBeenCalled();
   });
 
   it('totals offline wallet bills for the selected business date', async () => {
     models.Order.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
       populate: jest.fn().mockReturnThis(),
       sort: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),

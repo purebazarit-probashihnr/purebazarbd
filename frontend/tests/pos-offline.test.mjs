@@ -59,6 +59,27 @@ describe('offline POS billing and session', () => {
     const offlineSource = readFileSync(new URL('../src/hooks/use-pos-offline.js', import.meta.url), 'utf8');
     assert.match(offlineSource, /syncOfflinePosBill/);
   });
+
+  it('shows no offline-wallet verification messages on the POS or receipt', () => {
+    const paymentPanel = readFileSync(
+      new URL('../src/components/pos/payment-panel.jsx', import.meta.url),
+      'utf8',
+    );
+    const invoice = readFileSync(
+      new URL('../src/components/pos/invoice-modal.jsx', import.meta.url),
+      'utf8',
+    );
+    const receipt = readFileSync(
+      new URL('../src/services/pos-offline-receipt.cjs', import.meta.url),
+      'utf8',
+    );
+
+    assert.match(paymentPanel, /Wallet pays/);
+    assert.doesNotMatch(paymentPanel, /verification|verified|unverifiable/i);
+    assert.doesNotMatch(invoice, /Wallet verification pending/i);
+    assert.doesNotMatch(receipt, /walletVerification/);
+  });
+
   it('uses the shared bill engine for local non-wallet totals', () => {
     const bill = calculateOfflineBill([{
       productId: 'product-1',

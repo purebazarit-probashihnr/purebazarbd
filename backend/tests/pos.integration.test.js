@@ -22,6 +22,7 @@ jest.mock('../models', () => ({
 jest.mock('../services/probashiWalletService', () => ({
   checkWalletBalance: jest.fn(),
   verifyMember: jest.fn(),
+  getTransactionReport: jest.fn(),
 }));
 
 jest.mock('../services/offlineWalletVerificationService', () => ({
@@ -620,7 +621,7 @@ describe('POS checkout API', () => {
     expect(db.movements.filter((movement) => movement.type === 'SALE')).toHaveLength(1);
   });
 
-  it('syncs offline wallet bills without identifiers, once, as unverifiable', async () => {
+  it('syncs offline wallet bills once without verification state or Probashi calls', async () => {
     const body = {
       offlineId: '4bf76c78-bd69-4c74-800f-1c85797e2355',
       offlineNumber: 'OFF-65B000000000000000000003-19',
@@ -635,29 +636,27 @@ describe('POS checkout API', () => {
 
     expect(first.status).toBe(200);
     expect(first.body).toMatchObject({
-      synced: true, duplicate: false, walletUnverifiable: true,
-      note: 'No member ID or reference recorded',
+      synced: true, duplicate: false,
       order: {
         walletOffline: true,
-        walletVerification: 'unverifiable',
-        walletVerificationReason: 'No member ID or reference recorded',
         shareholderDiscountAmount: 5, grandTotal: 95,
         payments: [{ method: 'WALLET', amount: 95 }],
       },
     });
+    expect(first.body.order).not.toHaveProperty('walletVerification');
+    expect(first.body.order).not.toHaveProperty('walletVerificationReason');
+    expect(first.body.receipt).not.toHaveProperty('walletVerification');
     expect(duplicate.status).toBe(200);
     expect(duplicate.body).toMatchObject({
       synced: true,
       duplicate: true,
-      walletUnverifiable: true,
-      order: {
-        walletVerification: 'unverifiable',
-        walletVerificationReason: 'No member ID or reference recorded',
-      },
     });
+    expect(duplicate.body.order).not.toHaveProperty('walletVerification');
+    expect(duplicate.body.receipt).not.toHaveProperty('walletVerification');
     expect(db.orders).toHaveLength(1);
     expect(walletService.checkWalletBalance).not.toHaveBeenCalled();
     expect(walletService.verifyMember).not.toHaveBeenCalled();
+    expect(walletService.getTransactionReport).not.toHaveBeenCalled();
     expect(offlineWalletVerifier.verifyOfflineWalletOrder).not.toHaveBeenCalled();
   });
 

@@ -16,7 +16,6 @@ const money = (value) => (Number(value) || 0).toFixed(2);
 export default function PaymentPanel({
   methods, amounts, total, onMethods, onAmount, offline = false,
   offlineWalletAllowed = false,
-  offlineWalletMaximum = 2000, walletError = '',
 }) {
   const selected = methods.includes('WALLET') ? ['WALLET'] : methods;
   const paid = selected.reduce((sum, method) => sum + (Number(amounts[method]) || 0), 0);
@@ -49,13 +48,6 @@ export default function PaymentPanel({
       {selected.includes('WALLET') ? (
         <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
           <p className="text-emerald-800">Wallet pays ৳{money(total)}.</p>
-          {offline && offlineWalletAllowed && (
-            <div className="mt-3 space-y-3">
-              <p role="status" className="text-amber-800">Wallet payment will be verified when internet returns.</p>
-              {Number(total) > Number(offlineWalletMaximum) && <p role="alert" className="text-red-700">Offline wallet payment is limited to ৳{money(offlineWalletMaximum)} per bill.</p>}
-              {walletError && Number(total) <= Number(offlineWalletMaximum) && <p role="alert" className="text-red-700">{walletError}</p>}
-            </div>
-          )}
         </div>
       ) : (
         <div className="mt-3 space-y-3">

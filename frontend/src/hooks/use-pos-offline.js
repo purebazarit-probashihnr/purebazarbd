@@ -103,9 +103,7 @@ export default function usePosOffline(outletId, userId, offlineEnabled = true) {
         setSyncResults((current) => [{
           offlineNumber: bill.offlineNumber,
           status: data.flagged ? 'flagged' : 'synced',
-          detail: data.walletUnverifiable
-            ? 'wallet '
-            : data.reviewFlags?.join(', ') || '',
+          detail: data.reviewFlags?.join(', ') || '',
         }, ...current].slice(0, 20));
       } catch (error) {
         const detail = posErrorMessage(error);

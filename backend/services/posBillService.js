@@ -164,8 +164,6 @@ function receiptData(order) {
     payments: order.payments,
     memberId: order.memberId || null,
     walletOffline: order.walletOffline === true,
-    walletVerification: order.walletVerification || null,
-    walletVerificationReason: order.walletVerificationReason || null,
   };
 }
 

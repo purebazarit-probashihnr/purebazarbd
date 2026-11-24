@@ -6,7 +6,7 @@ import { useSelector } from 'react-redux';
 import { Badge, Button, Card, Input, Modal, Table } from '@/components/ui';
 import {
   getOfflineWalletBills, getWalletReconciliation, resolveWalletReconciliation,
-  runWalletReconciliation, verifyOfflineWalletBill,
+  runWalletReconciliation,
 } from '@/services/finance';
 import { formatFinanceDate, formatFinanceMoney, localDateInput } from './finance-utils';
 import { T } from '@/i18n/language-provider';
@@ -35,12 +35,8 @@ export default function WalletReconciliationPage() {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [offlineWallets, setOfflineWallets] = useState([]);
-  const [offlineWalletTotals, setOfflineWalletTotals] = useState({
-    pending: 0, verified: 0, mismatch: 0, notFound: 0, unverifiable: 0, flagged: 0,
-  });
   const [offlineWalletDateTotal, setOfflineWalletDateTotal] = useState({ count: 0, amount: 0 });
   const [offlineWalletLoading, setOfflineWalletLoading] = useState(true);
-  const [verifyingWalletId, setVerifyingWalletId] = useState('');
 
   useEffect(() => {
     if (!token || !canRead) return undefined;
@@ -64,7 +60,6 @@ export default function WalletReconciliationPage() {
       .then(({ data: result }) => {
         if (!active) return;
         setOfflineWallets(result.orders);
-        setOfflineWalletTotals(result.totals);
         setOfflineWalletDateTotal(result.dateTotal);
       })
       .catch((requestError) => active && setError(
@@ -108,53 +103,12 @@ export default function WalletReconciliationPage() {
     }
   }
 
-  async function verifyNow(order) {
-    setVerifyingWalletId(order._id);
-    setError('');
-    setNotice('');
-    try {
-      const { data: result } = await verifyOfflineWalletBill(
-        token, order._id, String(order.outlet?._id || order.outlet || ''),
-      );
-      setOfflineWallets((current) => current.map((item) => (
-        item._id === order._id ? result.order : item
-      )));
-      setNotice(`Wallet bill ${order.orderNumber} verification: ${result.order.walletVerification}.`);
-      setReload((value) => value + 1);
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Unable to verify this offline wallet bill.');
-    } finally {
-      setVerifyingWalletId('');
-    }
-  }
-
   const offlineWalletColumns = [
-    { key: 'orderNumber', label: 'Bill', render: (value, order) => <div><strong>{value}</strong><small className="block text-slate-500">{new Date(order.soldAt || order.createdAt).toLocaleString()}</small></div> },
-    { key: 'grandTotal', label: 'Amount', render: formatFinanceMoney },
-    { key: 'cashier', label: 'Cashier', render: (cashier) => cashier?.name || '—' },
+    { key: 'orderNumber', label: 'Bill' },
+    { key: 'soldAt', label: 'Date & time', render: (value, order) => new Date(value || order.createdAt).toLocaleString() },
     { key: 'outlet', label: 'Outlet', render: (outlet) => outlet?.name || '—' },
-    {
-      key: 'walletVerification',
-      label: 'Verification',
-      render: (value, order) => (
-        <div>
-          <Badge tone={value === 'verified' ? 'success' : value === 'pending' ? 'warning' : 'danger'}>
-            {value || 'pending'}
-          </Badge>
-          {order.walletVerificationReason && <small className="mt-1 block max-w-64 text-slate-600">{order.walletVerificationReason}</small>}
-        </div>
-      ),
-    },
-    {
-      key: 'action',
-      label: 'Action',
-      render: (_, order) => (
-        <Button size="sm" variant="secondary" disabled={!canWrite || verifyingWalletId === order._id}
-          onClick={() => verifyNow(order)}>
-          {verifyingWalletId === order._id ? 'Verifying…' : 'Verify now'}
-        </Button>
-      ),
-    },
+    { key: 'cashier', label: 'Cashier', render: (cashier) => cashier?.name || '—' },
+    { key: 'grandTotal', label: 'Amount', render: formatFinanceMoney },
   ];
 
   const columns = [
@@ -206,24 +160,12 @@ export default function WalletReconciliationPage() {
         {!canWrite && <p className="mt-3 text-sm text-slate-500"><T>{"Read-only access. Finance write permission is required to run or resolve reconciliation records."}</T></p>}
       </Card>
 
-      <Card title="Offline wallet bills" description="These sales are saved and included in revenue; verification never reverses a sale.">
+      <Card title="Offline wallet bills" description="Offline wallet bills for the selected date.">
         <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm font-medium text-slate-700">Total offline wallet bills · {date}</p>
           <strong className="text-xl">{formatFinanceMoney(offlineWalletDateTotal.amount)}</strong>
-          <p className="mt-1 text-sm text-slate-500">{offlineWalletDateTotal.count} bill(s) · compare with the Probashi settlement report.</p>
+          <p className="mt-1 text-sm text-slate-500">{offlineWalletDateTotal.count} bill(s)</p>
         </div>
-        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Card><small className="text-slate-500">Pending</small><strong className="mt-1 block text-xl">{offlineWalletTotals.pending}</strong></Card>
-          <Card><small className="text-slate-500">Verified</small><strong className="mt-1 block text-xl text-green-700">{offlineWalletTotals.verified}</strong></Card>
-          <Card><small className="text-slate-500">Mismatch</small><strong className="mt-1 block text-xl text-red-700">{offlineWalletTotals.mismatch}</strong></Card>
-          <Card><small className="text-slate-500">Not found</small><strong className="mt-1 block text-xl text-red-700">{offlineWalletTotals.notFound}</strong></Card>
-          <Card><small className="text-slate-500">Unverifiable</small><strong className="mt-1 block text-xl text-red-700">{offlineWalletTotals.unverifiable}</strong></Card>
-        </div>
-        {offlineWalletTotals.flagged > 0 && (
-          <p role="status" className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            {offlineWalletTotals.flagged} offline wallet bill(s) need attention.
-          </p>
-        )}
         {offlineWalletLoading ? <p role="status">Loading offline wallet bills…</p> : (
           <Table columns={offlineWalletColumns} rows={offlineWallets} rowKey="_id" emptyMessage="No offline wallet bills." />
         )}

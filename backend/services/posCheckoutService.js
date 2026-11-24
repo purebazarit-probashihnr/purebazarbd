@@ -75,6 +75,16 @@ async function checkWallet(result, userId) {
 async function existingOfflineOrder(offlineId) {
   return Order.findOne({ offlineId }).lean();
 }
+
+function offlineOrderOutput(order) {
+  const output = objectOf(order);
+  if (!output?.walletOffline) return output;
+  delete output.walletVerification;
+  delete output.walletVerificationReason;
+  delete output.walletVerificationCheckedAt;
+  return output;
+}
+
 async function commitBill(req, res, next, offline) {
   let session;
   try {
@@ -96,13 +106,7 @@ async function commitBill(req, res, next, offline) {
           duplicate: true,
           flagged: Boolean(existing.reviewRequired),
           reviewFlags: existing.reviewFlags || [],
-          ...(existing.walletOffline && existing.walletVerification === 'pending'
-            ? { walletPending: true, note: 'wallet pending' }
-            : {}),
-          ...(existing.walletOffline && existing.walletVerification === 'unverifiable'
-            ? { walletUnverifiable: true, note: 'No member ID or reference recorded' }
-            : {}),
-          order: existing,
+          order: offlineOrderOutput(existing),
           receipt: receiptData(existing),
         });
       }
@@ -197,8 +201,6 @@ async function commitBill(req, res, next, offline) {
         } : {}),
         ...(deferredWallet ? {
           walletOffline: true,
-          walletVerification: 'unverifiable',
-          walletVerificationReason: 'No member ID or reference recorded',
         } : {}),
         channel: 'POS',
         lines: result.bill.ledgerLines.map((line, index) => {
@@ -300,7 +302,7 @@ async function commitBill(req, res, next, offline) {
         ipAddress: req.ip,
       }], { session });
     });
-    const output = objectOf(order);
+    const output = offline ? offlineOrderOutput(order) : objectOf(order);
     return res.status(offline ? 200 : 201).json({
       success: true,
       ...(offline ? {
@@ -308,9 +310,6 @@ async function commitBill(req, res, next, offline) {
         duplicate: false,
         flagged: reviewFlags.length > 0,
         reviewFlags,
-        ...(deferredWallet
-          ? { walletUnverifiable: true, note: 'No member ID or reference recorded' }
-          : {}),
       } : {}),
       order: output,
       receipt: receiptData(output),
@@ -326,7 +325,7 @@ async function commitBill(req, res, next, offline) {
             duplicate: true,
             flagged: Boolean(existing.reviewRequired),
             reviewFlags: existing.reviewFlags || [],
-            order: existing,
+            order: offlineOrderOutput(existing),
             receipt: receiptData(existing),
           });
         }

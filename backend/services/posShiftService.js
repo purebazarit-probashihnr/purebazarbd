@@ -38,24 +38,16 @@ async function findPayments(shift, closedAt) {
     ],
   }).lean();
   const totals = new Map(PAYMENT_METHODS.map(([, code]) => [code, 0]));
-  const offlineWalletPending = orders
-    .filter((order) => order.walletOffline === true && order.walletVerification !== 'verified')
-    .reduce((summary, order) => ({
-      count: summary.count + 1,
-      amount: money(summary.amount + order.payments
-        .filter((payment) => payment.method === 'WALLET')
-        .reduce((sum, payment) => sum + Number(payment.amount), 0)),
-    }), { count: 0, amount: 0 });
   orders.forEach((order) => {
     order.payments.forEach((payment) => {
       totals.set(payment.method, money((totals.get(payment.method) || 0) + payment.amount));
     });
   });
-  return { totals, offlineWalletPending };
+  return { totals };
 }
 
 async function buildReport(shift, closedAt = shift.closedAt || new Date()) {
-  const { totals, offlineWalletPending } = await findPayments(shift, closedAt);
+  const { totals } = await findPayments(shift, closedAt);
   const cashSales = totals.get('CASH') || 0;
   const expectedCash = money(shift.openingCash + cashSales);
   const paymentSummary = PAYMENT_METHODS.map(([method, code]) => {
@@ -76,7 +68,6 @@ async function buildReport(shift, closedAt = shift.closedAt || new Date()) {
       ? money(shift.actualCash - expectedCash)
       : null,
     paymentSummary,
-    offlineWalletPending,
   };
 }
 

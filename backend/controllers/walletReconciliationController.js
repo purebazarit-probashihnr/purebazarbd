@@ -1,6 +1,5 @@
 const { AuditLog, Order, WalletReconciliation } = require('../models');
 const service = require('../services/walletReconciliationService');
-const offlineWalletVerificationService = require('../services/offlineWalletVerificationService');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -82,14 +81,10 @@ async function listOfflineWalletBills(req, res, next) {
         },
       ],
     } : null;
-    const [orders, pending, verified, mismatch, notFound, unverifiable, dateSummary] = await Promise.all([
-      Order.find(filter).populate('cashier', 'name').populate('outlet', 'name')
+    const [orders, dateSummary] = await Promise.all([
+      Order.find(dateMatch || filter).select('orderNumber soldAt createdAt grandTotal payments cashier outlet')
+        .populate('cashier', 'name').populate('outlet', 'name')
         .sort({ soldAt: -1, createdAt: -1 }).limit(200).lean(),
-      Order.countDocuments({ ...filter, walletVerification: 'pending' }),
-      Order.countDocuments({ ...filter, walletVerification: 'verified' }),
-      Order.countDocuments({ ...filter, walletVerification: 'mismatch' }),
-      Order.countDocuments({ ...filter, walletVerification: 'not_found' }),
-      Order.countDocuments({ ...filter, walletVerification: 'unverifiable' }),
       dateMatch ? Order.aggregate([
         { $match: dateMatch },
         { $unwind: '$payments' },
@@ -107,10 +102,6 @@ async function listOfflineWalletBills(req, res, next) {
     ]);
     res.json({
       orders,
-      totals: {
-        pending, verified, mismatch, notFound, unverifiable,
-        flagged: mismatch + notFound + unverifiable,
-      },
       dateTotal: {
         date: req.query.date || null,
         count: dateSummary?.[0]?.count || 0,
@@ -120,20 +111,6 @@ async function listOfflineWalletBills(req, res, next) {
   } catch (error) { next(error); }
 }
 
-async function verifyOfflineWalletBill(req, res, next) {
-  try {
-    const filter = { _id: req.params.id, walletOffline: true };
-    if (req.locationId) filter.outlet = req.locationId;
-    const order = await Order.findOne(filter).select('_id');
-    if (!order) throw statusError('Offline wallet bill was not found', 404);
-    const updated = await offlineWalletVerificationService.verifyOfflineWalletOrder(order._id, {
-      actorId: req.user._id,
-      ipAddress: req.ip,
-    });
-    res.json({ order: updated });
-  } catch (error) { next(error); }
-}
-
 module.exports = {
-  list, listOfflineWalletBills, resolve, run, verifyOfflineWalletBill,
+  list, listOfflineWalletBills, resolve, run,
 };

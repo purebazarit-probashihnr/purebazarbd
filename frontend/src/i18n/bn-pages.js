@@ -208,7 +208,6 @@ const pages = {
   'Opened': 'খোলা হয়েছে',
   'Cash sales': 'নগদ বিক্রয়',
   'Cash difference': 'নগদের পার্থক্য',
-  'Offline wallet bills pending or unverified': 'অফলাইন ওয়ালেট বিল যাচাইয়ের অপেক্ষায় বা যাচাই হয়নি',
   'Expected cash': 'প্রত্যাশিত নগদ',
   'Expected cash in drawer': 'ড্রয়ারে প্রত্যাশিত নগদ',
   'Actual cash counted (৳)': 'গণনাকৃত প্রকৃত নগদ (৳)',

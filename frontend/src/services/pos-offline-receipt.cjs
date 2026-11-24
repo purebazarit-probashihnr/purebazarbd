@@ -30,7 +30,6 @@ function createOfflineReceipt(bill, queuedBill, user, outletId, payments) {
     grandTotal: bill.grandTotal,
     payments,
     walletOffline: queuedBill.payload.walletOffline === true,
-    walletVerification: queuedBill.payload.walletOffline ? 'pending' : null,
   };
 }
 

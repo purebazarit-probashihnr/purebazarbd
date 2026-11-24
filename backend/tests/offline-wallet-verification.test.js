@@ -1,109 +1,33 @@
-jest.mock('../models', () => ({
-  AuditLog: { create: jest.fn() },
-  Order: { findById: jest.fn() },
-}));
+const mongoose = require('mongoose');
+const Order = require('../models/Order');
 
-jest.mock('../services/probashiWalletService', () => ({
-  verifyMember: jest.fn(),
-  getTransactionReport: jest.fn(),
-}));
+describe('legacy offline wallet order fields', () => {
+  it.each(['pending', 'verified', 'mismatch', 'not_found', 'unverifiable'])(
+    'continues to load an old order with the %s field value',
+    async (walletVerification) => {
+      const order = new Order({
+        orderNumber: `OFF-${walletVerification}`,
+        walletOffline: true,
+        walletVerification,
+        walletVerificationReason: 'Legacy value',
+        walletVerificationCheckedAt: new Date(),
+        lines: [{
+          productId: new mongoose.Types.ObjectId(),
+          productName: 'Item',
+          quantity: 1,
+          mrp: 10,
+          subtotal: 10,
+          total: 10,
+        }],
+        subtotal: 10,
+        grandTotal: 10,
+        payments: [{ method: 'WALLET', amount: 10 }],
+        paymentStatus: 'PAID',
+        cashier: new mongoose.Types.ObjectId(),
+        outlet: new mongoose.Types.ObjectId(),
+      });
 
-const { AuditLog, Order } = require('../models');
-const probashiWalletService = require('../services/probashiWalletService');
-const { verifyOfflineWalletOrder } = require('../services/offlineWalletVerificationService');
-
-function makeOrder() {
-  const order = {
-    _id: 'order-1',
-    walletOffline: true,
-    walletMemberId: 'PB-100',
-    walletReference: 'TX-100',
-    grandTotal: 125,
-    soldAt: new Date('2026-03-10T10:00:00.000Z'),
-    walletVerification: 'pending',
-    toObject() {
-      return {
-        _id: this._id,
-        walletVerification: this.walletVerification,
-        walletVerificationReason: this.walletVerificationReason,
-      };
+      await expect(order.validate()).resolves.toBeUndefined();
     },
-    save: jest.fn(async () => order),
-  };
-  return order;
-}
-
-describe('offline wallet verification', () => {
-  let order;
-  const validMember = {
-    memberId: 'PB-100', valid: true, active: true, walletEnabled: true,
-  };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    order = makeOrder();
-    Order.findById.mockResolvedValue(order);
-    AuditLog.create.mockResolvedValue({});
-    probashiWalletService.verifyMember.mockResolvedValue(validMember);
-    probashiWalletService.getTransactionReport.mockResolvedValue({
-      transactions: [{ transactionId: 'TX-100', amount: 125, date: '2026-03-10T10:00:00Z' }],
-    });
-  });
-
-  it('sets verified when Probashi confirms the member and exact reference amount', async () => {
-    await verifyOfflineWalletOrder(order._id, { actorId: 'manager-1' });
-
-    expect(order.walletVerification).toBe('verified');
-    expect(order.walletVerificationReason).toMatch(/verified/i);
-    expect(probashiWalletService.verifyMember).toHaveBeenCalledWith({ memberId: 'PB-100' });
-    expect(probashiWalletService.getTransactionReport).toHaveBeenCalled();
-    expect(AuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
-      actorId: 'manager-1', action: 'WALLET_VERIFY', entity: 'Order',
-    }));
-  });
-
-  it('sets mismatch when the matching reference has a different amount', async () => {
-    probashiWalletService.getTransactionReport.mockResolvedValue({
-      transactions: [{ transactionId: 'TX-100', amount: 124, date: '2026-03-10T10:00:00Z' }],
-    });
-
-    await verifyOfflineWalletOrder(order._id);
-
-    expect(order.walletVerification).toBe('mismatch');
-    expect(order.walletVerificationReason).toMatch(/does not match bill amount/);
-  });
-
-  it('sets not_found when the report has no transaction reference', async () => {
-    probashiWalletService.getTransactionReport.mockResolvedValue({ transactions: [] });
-
-    await verifyOfflineWalletOrder(order._id);
-
-    expect(order.walletVerification).toBe('not_found');
-    expect(order.walletVerificationReason).toMatch(/No matching Probashi transaction/);
-  });
-
-  it.each([
-    ['member ID', { walletMemberId: '', walletReference: 'TX-100' }],
-    ['reference', { walletMemberId: 'PB-100', walletReference: '' }],
-  ])('marks a bill without a %s as unverifiable without contacting Probashi', async (_missing, fields) => {
-    Object.assign(order, fields);
-
-    await verifyOfflineWalletOrder(order._id);
-
-    expect(order.walletVerification).toBe('unverifiable');
-    expect(order.walletVerificationReason).toBe('No member ID or reference recorded');
-    expect(probashiWalletService.verifyMember).not.toHaveBeenCalled();
-    expect(probashiWalletService.getTransactionReport).not.toHaveBeenCalled();
-    expect(order.save).toHaveBeenCalled();
-  });
-
-  it('keeps the bill pending with a reason when Probashi is unreachable', async () => {
-    probashiWalletService.getTransactionReport.mockRejectedValue(new Error('service unavailable'));
-
-    await verifyOfflineWalletOrder(order._id);
-
-    expect(order.walletVerification).toBe('pending');
-    expect(order.walletVerificationReason).toMatch(/Verification unavailable: service unavailable/);
-    expect(order.save).toHaveBeenCalled();
-  });
+  );
 });

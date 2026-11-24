@@ -805,3 +805,8 @@
 	- Files: Shared POS screen-state decision and offline health monitor; reusable light/dark OfflineState card for POS and app-shell fallback; auth restore/session expiry handling; POS outlet retry; Bengali translations and focused frontend tests.
 	- Decisions: Permission denial is shown only after online user data loads; eligible users with a valid offline session retain selling access, while expired sessions require sign-in. Offline screens poll `/api/health`, respond to browser reconnects, and retry account/outlet loading without a full reload. No database migration was run.
 	- Validation: Backend Jest passes (53 suites, 412 tests); frontend production build passes; frontend tests pass 59/59.
+
+- [x] O1c Offline wallet bills without verification messages
+	- Files: Offline POS sync and receipt; plain finance list of offline wallet bills; regular wallet tender shift totals; reconciliation filtering; focused backend and frontend regression tests.
+	- Decisions: Offline wallet orders sync idempotently as normal Wallet bills and never invoke member verification or Probashi reports. Manager list shows bill, date/time, outlet, cashier, and amount with a selected-date total; old verification fields remain readable but are omitted from bill outputs. Offline wallet bills stay out of online reconciliation and expected cash. The offline payment setting and per-bill maximum remain. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 413 tests); frontend production build passes; frontend tests pass 60/60.

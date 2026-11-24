@@ -46,6 +46,11 @@ function dateClause(query) {
 }
 
 async function addHistoricalUnitNames(orders) {
+  orders.forEach((order) => {
+    delete order.walletVerification;
+    delete order.walletVerificationReason;
+    delete order.walletVerificationCheckedAt;
+  });
   const missing = orders.flatMap((order) => order.lines).filter((line) => !line.packageUnitName);
   if (!missing.length) return orders;
   const products = await Product.find({ _id: { $in: missing.map((line) => line.productId) } })

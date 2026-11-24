@@ -195,9 +195,10 @@ describe('POS cashier shifts API', () => {
         { method: 'Cash', expectedAmount: 147.75, actualAmount: 145 },
         { method: 'Card', expectedAmount: 19.75, actualAmount: 19.75 },
         { method: 'bKash', expectedAmount: 20, actualAmount: 20 },
+        { method: 'Wallet', expectedAmount: 100, actualAmount: 100 },
       ]),
-      offlineWalletPending: { count: 2, amount: 100 },
     });
+    expect(closed.body.report).not.toHaveProperty('offlineWalletPending');
     expect(models.Order.find).toHaveBeenCalledWith(expect.objectContaining({
       cashier: cashierId,
       outlet: outletId,

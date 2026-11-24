@@ -30,7 +30,7 @@ describe('Sales History receipt builder', () => {
     assert.equal(receipt.grandTotal, 19.485);
   });
 
-  it('preserves the offline invoice number and pending wallet state after sync', () => {
+  it('preserves the offline invoice number and hides legacy verification fields', () => {
     const receipt = buildHistoryReceipt({
       orderNumber: 'OFF-OUTLET-17',
       soldAt: '2026-11-22T09:00:00.000Z',
@@ -41,8 +41,8 @@ describe('Sales History receipt builder', () => {
     });
 
     assert.equal(receipt.orderNumber, 'OFF-OUTLET-17');
-    assert.equal(receipt.walletVerification, 'pending');
     assert.equal(receipt.walletOffline, true);
+    assert.equal('walletVerification' in receipt, false);
   });
 
   it('preserves wallet tenders, stored discounts and VAT', () => {
