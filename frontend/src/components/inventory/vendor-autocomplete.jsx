@@ -61,7 +61,7 @@ export default function VendorAutocomplete({ token, value, onChange, excludeIds 
           {visibleOptions.map((vendor) => (
             <li key={vendor.id} role="option" aria-selected={vendor.id === value}>
               <button type="button" className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100" onMouseDown={(event) => event.preventDefault()} onClick={() => choose(vendor)}>
-                {label(vendor)}
+                {vendorLabel(vendor)}
               </button>
             </li>
           ))}
