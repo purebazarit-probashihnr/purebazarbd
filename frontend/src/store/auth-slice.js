@@ -1,13 +1,31 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import api, { setAuthToken } from '@/services/api';
 import {
-  offlineSessionExpiresAt, offlineSessionIsValid, tokenExpiresAt,
+  offlineSessionExpiresAt, offlineSessionIsValid, tokenExpiresAt, tokenIssuedAt,
 } from '@/services/offline-session-utils.cjs';
 import offlinePosAccess from '@/services/offline-pos-access.cjs';
+import offlineProfile from '@/services/offline-profile.cjs';
 
 const { isOfflinePosUser } = offlinePosAccess;
+const { clearOfflineProfile, storeOfflineProfile } = offlineProfile;
 
 const OFFLINE_SESSION_KEY = 'purebazar.offlineSession';
+
+async function updateOfflineProfile(user, loggedInAt) {
+  try {
+    await storeOfflineProfile(user, loggedInAt);
+  } catch (error) {
+    console.error('Unable to store the offline navigation profile.', error);
+  }
+}
+
+async function removeOfflineProfile() {
+  try {
+    await clearOfflineProfile();
+  } catch (error) {
+    console.error('Unable to clear the offline navigation profile.', error);
+  }
+}
 
 function readOfflineSession() {
   try {
@@ -41,6 +59,7 @@ export const restoreAuth = createAsyncThunk('auth/restore', async (_, { rejectWi
   const token = window.sessionStorage.getItem('purebazar.authToken') || cachedSession?.token;
   if (!token) {
     setAuthToken(null);
+    await removeOfflineProfile();
     return null;
   }
 
@@ -48,12 +67,13 @@ export const restoreAuth = createAsyncThunk('auth/restore', async (_, { rejectWi
   try {
     const { data } = await api.get('/auth/me');
     let restoredOfflineExpiresAt = null;
+    const loggedInAt = cachedSession?.loggedInAt || tokenIssuedAt(token) || new Date().toISOString();
     if (isOfflinePosUser(data.user)) {
       const session = {
         ...cachedSession,
         token,
         user: data.user,
-        loggedInAt: cachedSession?.loggedInAt || new Date().toISOString(),
+        loggedInAt,
       };
       if (!session.expiresAt) session.expiresAt = offlineSessionExpiresAt(session);
       writeOfflineSession(session);
@@ -61,6 +81,7 @@ export const restoreAuth = createAsyncThunk('auth/restore', async (_, { rejectWi
     } else {
       window.localStorage.removeItem(OFFLINE_SESSION_KEY);
     }
+    await updateOfflineProfile(data.user, loggedInAt);
     window.sessionStorage.setItem('purebazar.authToken', token);
     window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: true }));
     return {
@@ -73,7 +94,7 @@ export const restoreAuth = createAsyncThunk('auth/restore', async (_, { rejectWi
           ...cachedSession,
           token,
           user: data.user,
-          loggedInAt: cachedSession?.loggedInAt || new Date().toISOString(),
+          loggedInAt,
         }),
     };
   } catch (error) {
@@ -81,12 +102,14 @@ export const restoreAuth = createAsyncThunk('auth/restore', async (_, { rejectWi
       window.localStorage.removeItem(OFFLINE_SESSION_KEY);
       window.sessionStorage.removeItem('purebazar.authToken');
       setAuthToken(null);
+      await removeOfflineProfile();
       return null;
     }
     if (error.response && error.response.status < 500) {
       setAuthToken(null);
       window.sessionStorage.removeItem('purebazar.authToken');
       window.localStorage.removeItem(OFFLINE_SESSION_KEY);
+      await removeOfflineProfile();
       return rejectWithValue(error.response.data?.message || 'Unable to verify your session.');
     }
     window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: false }));
@@ -105,8 +128,15 @@ export const restoreAuth = createAsyncThunk('auth/restore', async (_, { rejectWi
 export const refreshSession = createAsyncThunk('auth/refresh', async (_, { rejectWithValue }) => {
   try {
     const { data } = await api.get('/auth/me');
+    const cachedSession = readOfflineSession();
+    const token = window.sessionStorage.getItem('purebazar.authToken') || cachedSession?.token;
+    await updateOfflineProfile(
+      data.user,
+      cachedSession?.loggedInAt || tokenIssuedAt(token) || new Date().toISOString(),
+    );
     return data.user;
   } catch (error) {
+    if (error.response?.status === 401) await removeOfflineProfile();
     return rejectWithValue(error.response?.status || 0);
   }
 });
@@ -117,14 +147,17 @@ export const loginUser = createAsyncThunk('auth/login', async (credentials, { re
     setAuthToken(data.token);
     window.sessionStorage.setItem('purebazar.authToken', data.token);
     if (isOfflinePosUser(data.user)) {
+      const loggedInAt = new Date().toISOString();
       writeOfflineSession({
         token: data.token,
         user: data.user,
-        loggedInAt: new Date().toISOString(),
+        loggedInAt,
         expiresAt: tokenExpiresAt(data.token),
       });
+      await updateOfflineProfile(data.user, loggedInAt);
     } else {
       window.localStorage.removeItem(OFFLINE_SESSION_KEY);
+      await updateOfflineProfile(data.user, new Date().toISOString());
     }
     return data;
   } catch (error) {
@@ -138,6 +171,7 @@ export const logoutUser = createAsyncThunk('auth/logout', async (_, { getState, 
     await api.post('/auth/logout', null, { headers: { Authorization: `Bearer ${token}` } });
     setAuthToken(null);
     window.localStorage.removeItem(OFFLINE_SESSION_KEY);
+    await removeOfflineProfile();
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || 'Unable to sign out. Please try again.');
   }

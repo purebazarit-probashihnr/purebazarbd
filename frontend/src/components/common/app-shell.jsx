@@ -1,8 +1,9 @@
 ﻿'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDispatch } from 'react-redux';
+import { toast } from 'sonner';
 import Header from './header';
 import Sidebar from './sidebar';
 import {
@@ -25,6 +26,7 @@ export default function AppShell({ children }) {
   const dispatch = useDispatch();
   const { t } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const wasOffline = useRef(false);
   const {
     initialized, isAuthenticated, canAccess, user, offlineSessionValid, offlineSessionExpiresAt,
   } = useAuth();
@@ -32,6 +34,7 @@ export default function AppShell({ children }) {
     || user?.permissions?.includes('shifts:manage');
   const [online, setOnline] = useState(true);
   const [shiftOpen, setShiftOpen] = useState(false);
+  const offlinePosEligible = isOfflinePosUser(user);
 
   useEffect(() => {
     dispatch(restoreAuth());
@@ -131,6 +134,25 @@ export default function AppShell({ children }) {
     if (pathname !== '/login' && !isAuthenticated) router.replace('/login');
   }, [initialized, isAuthenticated, pathname, router]);
 
+  useEffect(() => {
+    if (!initialized || !isAuthenticated) {
+      wasOffline.current = false;
+      return;
+    }
+    if (!online) {
+      if (offlinePosEligible && pathname !== '/orders/pos') {
+        router.replace('/orders/pos');
+        if (!wasOffline.current) toast(t("You're offline. Switched to POS."));
+      }
+      wasOffline.current = true;
+      return;
+    }
+    if (wasOffline.current) {
+      wasOffline.current = false;
+      toast(t('Back online'));
+    }
+  }, [initialized, isAuthenticated, offlinePosEligible, online, pathname, router, t]);
+
   const hasOtherModulePermission = navigationItems
     .flatMap((item) => item.children || [item])
     .filter((item) => item.href !== '/dashboard' && !item.href.startsWith('/orders/'))
@@ -138,9 +160,6 @@ export default function AppShell({ children }) {
   const posLocked = Boolean(user?.lockCashierToPos
     && user?.role !== 'Super Admin'
     && (!hasOtherModulePermission || shiftOpen));
-  const canUseOfflinePos = isOfflinePosUser(user)
-    && offlineSessionValid
-    && Number(offlineSessionExpiresAt) > Date.now();
 
   const handleOfflineReconnect = useCallback(async () => {
     try {
@@ -165,12 +184,12 @@ export default function AppShell({ children }) {
   }
   if (pathname === '/login') return isAuthenticated ? null : children;
   if (!isAuthenticated) return <main className="auth-status" role="status">{t('Redirecting to sign in...')}</main>;
-  if (!online && pathname !== '/orders/pos') {
+  if (!online && pathname !== '/orders/pos' && !offlinePosEligible) {
     return (
       <OfflineState
         title="You're offline"
         body="This page needs an internet connection."
-        showGoToPos={canUseOfflinePos}
+        showGoToPos={false}
         onReachable={handleOfflineReconnect}
       />
     );
@@ -189,7 +208,12 @@ export default function AppShell({ children }) {
 
   return (
     <div className="app-shell">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} posLocked={posLocked} />
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        posLocked={posLocked}
+        offline={offlinePosEligible && !online}
+      />
       <div className="workspace">
         <Header section={getCurrentSection(pathname)} onMenuClick={() => setSidebarOpen(true)} posLocked={posLocked} />
         <main className="page-content">{children}</main>

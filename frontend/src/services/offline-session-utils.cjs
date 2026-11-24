@@ -9,6 +9,17 @@ function tokenExpiresAt(token) {
   }
 }
 
+function tokenIssuedAt(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    const issuedAt = Number(payload.iat) * 1000;
+    return Number.isFinite(issuedAt) && issuedAt > 0
+      ? new Date(issuedAt).toISOString() : null;
+  } catch {
+    return null;
+  }
+}
+
 function offlineSessionExpiresAt(session) {
   const configuredHours = Number(session?.user?.offlineSessionHours) || MAX_OFFLINE_SESSION_HOURS;
   const hours = Math.min(MAX_OFFLINE_SESSION_HOURS, Math.max(1, configuredHours));
@@ -23,5 +34,6 @@ function offlineSessionIsValid(session, now = Date.now()) {
 }
 
 module.exports = {
-  MAX_OFFLINE_SESSION_HOURS, offlineSessionExpiresAt, offlineSessionIsValid, tokenExpiresAt,
+  MAX_OFFLINE_SESSION_HOURS, offlineSessionExpiresAt, offlineSessionIsValid,
+  tokenExpiresAt, tokenIssuedAt,
 };

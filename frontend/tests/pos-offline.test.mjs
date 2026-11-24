@@ -13,20 +13,34 @@ const { isOfflinePosUser } = require('../src/services/offline-pos-access.cjs');
 describe('offline POS billing and session', () => {
   it('allows only fixed-outlet cashiers and outlet managers', () => {
     assert.equal(isOfflinePosUser({
-      role: 'Cashier', locationId: 'outlet-1', location: { type: 'OUTLET' },
+      role: 'Cashier', permissions: ['pos:read'],
+      locationId: 'outlet-1', location: { type: 'OUTLET' },
     }), true);
     assert.equal(isOfflinePosUser({
-      role: 'Outlet Cashier', locationId: { _id: 'outlet-1', type: 'OUTLET' },
+      role: 'Outlet Cashier', permissions: ['pos:read'],
+      locationId: { _id: 'outlet-1', type: 'OUTLET' },
     }), true);
     assert.equal(isOfflinePosUser({
-      role: 'Outlet Manager', locationId: 'outlet-1', location: { type: 'OUTLET' },
+      role: 'Outlet Manager', permissions: ['pos.sales:write'],
+      locationId: 'outlet-1', location: { type: 'OUTLET' },
     }), true);
     assert.equal(isOfflinePosUser({
       role: 'Super Admin', locationId: null, permissions: ['*'],
     }), false);
     assert.equal(isOfflinePosUser({
-      role: 'Operations Manager', locationId: 'outlet-1',
+      role: 'Outlet Manager', permissions: ['pos:read'], locationId: 'outlet-1',
       location: { type: 'OUTLET' }, canViewAllLocations: true,
+    }), false);
+    assert.equal(isOfflinePosUser({
+      role: 'Cashier', permissions: ['pos:read'], locationId: 'warehouse-1',
+      location: { type: 'CENTRAL' },
+    }), false);
+    assert.equal(isOfflinePosUser({
+      role: 'Cashier', permissions: ['pos:read'], locationId: 'outlet-1',
+      location: { type: 'OUTLET' }, locationIds: ['outlet-1', 'outlet-2'],
+    }), false);
+    assert.equal(isOfflinePosUser({
+      role: 'Cashier', locationId: 'outlet-1', location: { type: 'OUTLET' },
     }), false);
   });
 
@@ -45,7 +59,8 @@ describe('offline POS billing and session', () => {
 
   it('keeps a cashier selling and syncing offline', () => {
     const cashier = {
-      role: 'Cashier', locationId: 'outlet-1', location: { type: 'OUTLET' },
+      role: 'Cashier', permissions: ['pos:read'],
+      locationId: 'outlet-1', location: { type: 'OUTLET' },
     };
     assert.equal(isOfflinePosUser(cashier), true);
     const bill = calculateOfflineBill([{

@@ -810,3 +810,8 @@
 	- Files: Offline POS sync and receipt; plain finance list of offline wallet bills; regular wallet tender shift totals; reconciliation filtering; focused backend and frontend regression tests.
 	- Decisions: Offline wallet orders sync idempotently as normal Wallet bills and never invoke member verification or Probashi reports. Manager list shows bill, date/time, outlet, cashier, and amount with a selected-date total; old verification fields remain readable but are omitted from bill outputs. Offline wallet bills stay out of online reconciliation and expected cash. The offline payment setting and per-bill maximum remain. No database migration was run.
 	- Validation: Backend Jest passes (53 suites, 413 tests); frontend production build passes; frontend tests pass 60/60.
+
+- [x] Offline landing for cashier and outlet manager
+	- Files: Exact POS-permission/outlet eligibility helper; Cache Storage offline profile lifecycle; pure service-worker navigation decision and cached POS assets; offline app-shell routing, toast, disabled sidebar entries; focused eligibility/navigation tests.
+	- Decisions: Eligibility requires POS permission, exactly one OUTLET location, and neither Super Admin nor all-location access. The service worker redirects valid sessions to cached POS, shows sign-in required for expired or missing profiles, and keeps the existing offline card for ineligible users. The profile stores only user/outlet display details and session expiry; logout clears it. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 413 tests); frontend tests pass 67/67; frontend production build passes; all 20 static POS asset references exist in the build output.
