@@ -1,5 +1,5 @@
-const { calculateBill } = require('../../../backend/services/billEngine');
-const { linePricing } = require('../../../backend/utils/piecePricing');
+const { calculateBill } = require('../shared/billEngine.cjs');
+const { linePricing } = require('../shared/piecePricing.cjs');
 
 function calculateOfflineBill(items, billDiscount, methods, settings) {
   if (!methods.length) {

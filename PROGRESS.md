@@ -815,3 +815,8 @@
 	- Files: Exact POS-permission/outlet eligibility helper; Cache Storage offline profile lifecycle; pure service-worker navigation decision and cached POS assets; offline app-shell routing, toast, disabled sidebar entries; focused eligibility/navigation tests.
 	- Decisions: Eligibility requires POS permission, exactly one OUTLET location, and neither Super Admin nor all-location access. The service worker redirects valid sessions to cached POS, shows sign-in required for expired or missing profiles, and keeps the existing offline card for ineligible users. The profile stores only user/outlet display details and session expiry; logout clears it. No database migration was run.
 	- Validation: Backend Jest passes (53 suites, 413 tests); frontend tests pass 67/67; frontend production build passes; all 20 static POS asset references exist in the build output.
+
+- [x] Fix frontend Docker build: no backend imports
+	- Files: Frontend-local CommonJS copies of `billEngine` and `piecePricing`; offline POS billing imports updated; frontend tests for module drift and backend import paths.
+	- Decisions: The bill engine and piece-pricing module now exist in both backend and frontend; a drift test compares normalized file contents and tells developers to re-copy changed modules. Frontend source must not import paths containing `/backend/`. Backend originals remain unchanged. No database migration was run.
+	- Validation: Frontend tests pass (69/69); backend Jest passes (53 suites, 413 tests); normal frontend build and frontend-only isolated `npm ci` + production build pass with no backend folder beside the copy. The temporary directory was removed.
