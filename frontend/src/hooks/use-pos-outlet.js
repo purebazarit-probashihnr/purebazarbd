@@ -50,6 +50,9 @@ export default function usePosOutlet({
         return defaultFirstOutlet ? activeOutlets[0]?.id || '' : '';
       });
     }).catch((error) => {
+      if (!error.response) {
+        window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: false }));
+      }
       if (active) setOutletError(error.response?.data?.message || 'Unable to load active outlets.');
     }).finally(() => {
       if (active) setLoadingOutlets(false);

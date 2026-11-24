@@ -25,7 +25,7 @@ function createOfflineUuid() {
 }
 
 export default function usePosBilling({
-  user, canWrite, canApprove, online, catalog, queueOfflineBill, selectedOutletId,
+  user, canWrite, canApprove, offlineEnabled = true, online, catalog, queueOfflineBill, selectedOutletId,
   hasOutletSelection, items, setItems, billDiscount, setBillDiscount,
 }) {
   const [methods, setMethods] = useState(['CASH']);
@@ -192,6 +192,10 @@ export default function usePosBilling({
   }
 
   function holdSale() {
+    if (!offlineEnabled && !online) {
+      setCheckoutError('Offline POS is available only for cashiers and outlet managers.');
+      return;
+    }
     if (!items.length) {
       setCheckoutError('Cart is empty. Add items before holding a sale.');
       return;

@@ -19,6 +19,7 @@ export default function AttendanceClockControl({ token, compact = false }) {
       setEmployee(data.employee);
       setOpenRecord(data.openRecord);
     }).catch((requestError) => {
+      if (!navigator.onLine || !requestError.response) return;
       if (active) setError(requestError.response?.data?.message || 'Unable to load attendance status.');
     });
     return () => { active = false; };
@@ -31,6 +32,7 @@ export default function AttendanceClockControl({ token, compact = false }) {
       const { data } = await (action === 'in' ? clockIn(token) : clockOut(token));
       setOpenRecord(action === 'in' ? data.record : null);
     } catch (requestError) {
+      if (!navigator.onLine || !requestError.response) return;
       setError(requestError.response?.data?.message || 'Unable to record attendance.');
     } finally {
       setBusy(false);

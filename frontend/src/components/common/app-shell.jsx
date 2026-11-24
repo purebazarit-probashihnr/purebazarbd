@@ -47,7 +47,11 @@ export default function AppShell({ children }) {
 
   useEffect(() => {
     setOnline(navigator.onLine);
-    const onOnline = () => setOnline(true);
+    const onOnline = () => {
+      dispatch(refreshSession()).unwrap()
+        .then(() => setOnline(true))
+        .catch((error) => setOnline(error !== 0));
+    };
     const onOffline = () => setOnline(false);
     const onNetworkStatus = (event) => setOnline(Boolean(event.detail));
     window.addEventListener('online', onOnline);
@@ -58,7 +62,7 @@ export default function AppShell({ children }) {
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('purebazar:network-status', onNetworkStatus);
     };
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
     setShiftOpen(false);

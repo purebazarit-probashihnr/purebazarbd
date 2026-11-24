@@ -22,6 +22,9 @@ import HoldSaleModal from './hold-sale-modal';
 import InvoiceModal from './invoice-modal';
 import ErrorToast from './error-toast';
 import { T } from '@/i18n/language-provider';
+import offlinePosAccess from '@/services/offline-pos-access.cjs';
+
+const { isOfflinePosUser } = offlinePosAccess;
 
 export default function PosBillingPage() {
   const {
@@ -30,13 +33,15 @@ export default function PosBillingPage() {
   const canRead = hasPermission('pos:read');
   const canWrite = hasPermission('pos:write');
   const canApprove = user?.role === 'Super Admin';
+  const offlinePosUser = isOfflinePosUser(user);
   const {
     isSuperAdmin, outlets, selectedOutletId, setSelectedOutletId, loadingOutlets, outletError,
   } = usePosOutlet();
-  const outletId = selectedOutletId || String(user?.locationId?._id || user?.locationId || '');
+  const assignedOutletId = String(user?.locationId?._id || user?.locationId || '');
+  const outletId = offlinePosUser ? assignedOutletId : (selectedOutletId || assignedOutletId);
   const {
     online, catalog, queuedBills, syncResults, catalogError, syncing, queueOfflineBill,
-  } = usePosOffline(outletId, user?.id);
+  } = usePosOffline(outletId, user?.id, offlinePosUser);
   const [toast, setToast] = useState('');
   const toastTimer = useRef(null);
   const showToast = useCallback((message) => {
@@ -54,6 +59,7 @@ export default function PosBillingPage() {
     user,
     canWrite,
     canApprove,
+    offlineEnabled: offlinePosUser,
     online,
     catalog,
     queueOfflineBill,
@@ -82,6 +88,15 @@ export default function PosBillingPage() {
   if (!initialized) return <p role="status" className="py-10 text-center"><T>{"Loading your POS session..."}</T></p>;
   if (!token || !canRead) return <p role="alert" className="rounded bg-red-50 p-4 text-red-800"><T>{"You do not have permission to view the POS."}</T></p>;
   if (!canWrite) return <p role="alert" className="rounded bg-red-50 p-4 text-red-800"><T>{"You do not have permission to complete POS sales."}</T></p>;
+  if (!offlinePosUser && !online) {
+    return (
+      <section className="mx-auto max-w-7xl">
+        <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm font-medium text-amber-900">
+          Offline POS is available only for cashiers and outlet managers. Connect to the internet to use POS.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section className="mx-auto max-w-7xl space-y-5">

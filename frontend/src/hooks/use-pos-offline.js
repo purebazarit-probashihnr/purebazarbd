@@ -12,7 +12,7 @@ import {
   updateOfflineBill,
 } from '@/services/pos-offline-storage';
 
-export default function usePosOffline(outletId, userId) {
+export default function usePosOffline(outletId, userId, offlineEnabled = true) {
   const [browserOnline, setBrowserOnline] = useState(true);
   const [networkAvailable, setNetworkAvailable] = useState(true);
   const [catalog, setCatalog] = useState(null);
@@ -28,16 +28,21 @@ export default function usePosOffline(outletId, userId) {
   }, []);
 
   const refreshQueue = useCallback(async () => {
-    if (!userId) {
+    if (!offlineEnabled || !userId) {
       setQueuedBills([]);
       return [];
     }
     const bills = await listOfflineBills(userId);
     setQueuedBills(bills);
     return bills;
-  }, [userId]);
+  }, [offlineEnabled, userId]);
 
   const refreshCatalog = useCallback(async (targetOutletId) => {
+    if (!offlineEnabled) {
+      setCatalog(null);
+      setCatalogError('');
+      return null;
+    }
     if (!targetOutletId) return null;
     if (!navigator.onLine) {
       setBrowserOnline(false);
@@ -78,10 +83,10 @@ export default function usePosOffline(outletId, userId) {
         : `${posErrorMessage(error)} No offline catalog is available for this outlet.`);
       return null;
     }
-  }, [reportNetwork, userId]);
+  }, [offlineEnabled, reportNetwork, userId]);
 
   const syncPending = useCallback(async (targetOutletId) => {
-    if (!navigator.onLine || !targetOutletId || !userId) return;
+    if (!offlineEnabled || !navigator.onLine || !targetOutletId || !userId) return;
     const bills = (await listOfflineBills(userId))
       .filter((bill) => bill.outletId === String(targetOutletId));
     if (!bills.length) {
@@ -115,9 +120,10 @@ export default function usePosOffline(outletId, userId) {
     }
     await refreshQueue();
     setSyncing(false);
-  }, [refreshQueue, reportNetwork, userId]);
+  }, [offlineEnabled, refreshQueue, reportNetwork, userId]);
 
   const queueOfflineBill = useCallback(async (bill) => {
+    if (!offlineEnabled) throw new Error('Offline POS is not available for this user.');
     if (!catalog?.outlet || !catalog.offlineNumberRange) {
       throw new Error('Offline bill numbers are not available. Reconnect and refresh the POS catalog.');
     }
@@ -143,7 +149,7 @@ export default function usePosOffline(outletId, userId) {
     setCatalog(await readPosCatalog(catalog.outlet.id));
     await refreshQueue();
     return queued;
-  }, [catalog, refreshQueue, userId]);
+  }, [catalog, offlineEnabled, refreshQueue, userId]);
 
   useEffect(() => {
     setBrowserOnline(navigator.onLine);

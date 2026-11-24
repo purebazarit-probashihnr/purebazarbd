@@ -795,3 +795,8 @@
 	- Files: Shared public receipt-logo path module; receipt modal image loading; service worker logo precache; focused public-asset test.
 	- Decisions: Receipt preview and print use the existing `/logo.png` asset with no missing-path probes; the service worker caches the path module and logo for offline printing. Existing monochrome conversion, centering, and 58 mm/80 mm width limits remain unchanged. No database migration was run.
 	- Validation: Frontend production build passes; receipt-logo asset test passes. Full frontend tests pass 53/54; the existing i18n test fails for three untranslated goods-receive strings.
+
+- [x] Offline POS only for cashier and outlet manager
+	- Files: Shared `isOfflinePosUser` helper; POS/offline session/catalog/queue/held-bill guards; POS outlet and error handling; app-shell network badge and attendance widget; focused frontend tests and Bengali translations.
+	- Decisions: Offline POS is enabled only for a fixed-outlet Cashier, Outlet Cashier, or Outlet Manager who is not Super Admin and is not allowed to view all locations. Other users get no offline catalog, session, queue, or offline holding behavior and see one offline-POS access message. Fixed-outlet users use their login outlet without fetching the outlet list. API connection failures set the global badge Offline and attendance status fails silently.
+	- Validation: Backend Jest passes (53 suites, 412 tests); frontend production build passes; frontend tests pass 57/57. No database migration was run.
