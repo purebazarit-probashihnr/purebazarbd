@@ -767,8 +767,8 @@
 	- Validation: Full backend Jest passes (53 suites, 390 tests); frontend production build passes; focused offline POS tests pass (6/6). Frontend-wide tests retain the existing i18n failure for nine untranslated strings.
 
 - [x] Receipt in Sales History and main logo
-	- Files: Added scoped and audited receipt reprints from bill rows and bill details; shared POS invoice layout and stored-order receipt builder; thermal monochrome static logo with sidebar-logo fallback.
-	- Decisions: Receipts use saved order totals and payment/line snapshots, mark all history opens `COPY - Reprint`, and audit actor, timestamp, and order. The service worker already precaches `/logo.png` for offline fallback. No database migration was run.
+	- Files: Added scoped and audited receipt reprints from bill rows and bill details; shared POS invoice layout and stored-order receipt builder; thermal monochrome static logo.
+	- Decisions: Receipts use saved order totals and payment/line snapshots, mark all history opens `COPY - Reprint`, and audit actor, timestamp, and order. The service worker precaches `/logo.png` for offline receipt printing. No database migration was run.
 	- Validation: Backend Jest passes (53 suites, 392 tests); receipt builder tests pass (4/4); frontend production build passes. Full frontend tests pass 43/44; the remaining existing i18n assertion reports nine unrelated untranslated strings.
 
 - [x] All inventory view and vendor columns
@@ -790,3 +790,8 @@
 	- Files: Shared modal portal/stack and lifecycle handling; invoice, hold-sale, and held-bills dialogs use the shared mechanism; modal stack order test.
 	- Decisions: Each modal has its own increasing layer and backdrop; only the top modal handles Escape/outside clicks. Body scroll is locked until the last modal closes, and focus is restored to the opener. Receipt printing remains scoped to the receipt with the existing 58 mm and 80 mm sizes. No database migration was run.
 	- Validation: Frontend production build passes; modal stack test passes. Full frontend test run passes 52/53; the existing i18n test fails for three untranslated goods-receiving strings.
+
+- [x] Fix receipt logo path
+	- Files: Shared public receipt-logo path module; receipt modal image loading; service worker logo precache; focused public-asset test.
+	- Decisions: Receipt preview and print use the existing `/logo.png` asset with no missing-path probes; the service worker caches the path module and logo for offline printing. Existing monochrome conversion, centering, and 58 mm/80 mm width limits remain unchanged. No database migration was run.
+	- Validation: Frontend production build passes; receipt-logo asset test passes. Full frontend tests pass 53/54; the existing i18n test fails for three untranslated goods-receive strings.

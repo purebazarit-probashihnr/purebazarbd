@@ -16,7 +16,8 @@ function ReceiptLogo() {
 
   useEffect(() => {
     let active = true;
-    const loadLogo = (source, fallback = false) => {
+    const source = window.PUREBAZAR_RECEIPT_LOGO_PATH;
+    if (typeof source === 'string' && source) {
       const image = new Image();
       image.onload = () => {
         if (!active) return;
@@ -40,20 +41,14 @@ function ReceiptLogo() {
             pixels.data[index + 2] = value;
           }
           context.putImageData(pixels, 0, 0);
-          setLogo({ src: canvas.toDataURL('image/png'), fallback });
+          setLogo({ src: canvas.toDataURL('image/png') });
         } catch {
-          setLogo({ src: source, fallback });
+          setLogo({ src: source });
         }
       };
-      image.onerror = () => {
-        if (!active) return;
-        if (!fallback) loadLogo('/logo.png', true);
-        else setLogo(null);
-      };
+      image.onerror = () => { if (active) setLogo(null); };
       image.src = source;
-    };
-
-    loadLogo('/brand/purebazar-logo.png');
+    }
     return () => { active = false; };
   }, []);
 

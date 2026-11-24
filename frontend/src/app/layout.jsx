@@ -1,5 +1,6 @@
 ﻿import './globals.css';
 import './theme.css';
+import Script from 'next/script';
 import { ThemeProvider, themeInitScript } from '@/components/common/theme-provider';
 import StoreProvider from '@/store/provider';
 import AppToaster from '@/components/common/toaster';
@@ -22,6 +23,7 @@ export default function RootLayout({ children }) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <Script src="/receipt-logo-path.js" strategy="beforeInteractive" />
       </head>
       <body>
         <ThemeProvider>

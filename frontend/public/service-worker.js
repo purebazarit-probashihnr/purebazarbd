@@ -1,3 +1,5 @@
+importScripts('/receipt-logo-path.js');
+
 const CACHE_NAME = 'purebazar-pos-v1';
 const POS_URL = '/orders/pos';
 
@@ -7,7 +9,8 @@ self.addEventListener('install', (event) => {
     const response = await fetch(POS_URL);
     if (!response.ok) throw new Error('POS page could not be cached for offline use.');
     await cache.put(POS_URL, response.clone());
-    await cache.add('/logo.png');
+    await cache.add('/receipt-logo-path.js');
+    await cache.add(self.PUREBAZAR_RECEIPT_LOGO_PATH);
     const html = await response.text();
     const assets = [...html.matchAll(/(?:src|href)="([^"]*\/_next\/static\/[^"]+)"/g)]
       .map((match) => new URL(match[1], self.location.origin).href);
