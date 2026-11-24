@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Button from '@/components/ui/button';
+import Modal from '@/components/ui/modal';
 import { T } from '@/i18n/language-provider';
 
 export default function HoldSaleModal({ onConfirm, onCancel }) {
@@ -13,9 +14,8 @@ export default function HoldSaleModal({ onConfirm, onCancel }) {
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="hold-sale-title" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+    <Modal open onClose={onCancel} title="Hold Sale">
       <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-xl bg-white p-5 shadow-xl">
-        <h2 id="hold-sale-title" className="text-lg font-semibold text-slate-900"><T>{"Hold Sale"}</T></h2>
         <label className="block text-sm font-medium text-slate-700">
           Customer Name / Token Number (Optional)
           <input
@@ -32,6 +32,6 @@ export default function HoldSaleModal({ onConfirm, onCancel }) {
           <Button type="submit">Confirm Hold</Button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }

@@ -785,3 +785,8 @@
 	- Files: `backend/models/ProductBarcodeCounter.js`, product barcode generation and collision helpers, product create/update and vendor-copy validation, barcode form source/warning/conflict handling, and focused backend/frontend tests.
 	- Decisions: New blank codes use an atomic 10-digit serial in the reserved `29` range with an EAN-13 check digit; lookup checks primary, extra, and indexed codes across all owners, treating UPC-A and leading-zero EAN-13 as equivalent. Typed/scanned codes remain manufacturer codes; legacy PB fallback and the per-vendor unique index remain unchanged. No migration was run.
 	- Validation: Backend Jest passes (53 suites, 412 tests); frontend build passes; focused barcode tests pass (9/9). Full frontend tests retain one existing i18n assertion failure for three untranslated goods-receive strings.
+
+- [x] Fix modal stacking for receipt
+	- Files: Shared modal portal/stack and lifecycle handling; invoice, hold-sale, and held-bills dialogs use the shared mechanism; modal stack order test.
+	- Decisions: Each modal has its own increasing layer and backdrop; only the top modal handles Escape/outside clicks. Body scroll is locked until the last modal closes, and focus is restored to the opener. Receipt printing remains scoped to the receipt with the existing 58 mm and 80 mm sizes. No database migration was run.
+	- Validation: Frontend production build passes; modal stack test passes. Full frontend test run passes 52/53; the existing i18n test fails for three untranslated goods-receiving strings.

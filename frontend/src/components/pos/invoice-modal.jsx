@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Printer, X } from 'lucide-react';
+import { Modal } from '@/components/ui';
 import { getCode39Runs } from '@/services/code39.cjs';
 import { formatLineQuantity } from '@/services/stock-units.cjs';
 import { paymentMethodLabel } from '@/services/pos-screen-utils.cjs';
@@ -147,28 +148,33 @@ export default function InvoiceModal({ receipt, onClose }) {
   const pageSize = `${width} auto`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 print:static print:bg-transparent print:p-0" role="dialog" aria-modal="true" aria-label="Invoice">
+    <Modal
+      open
+      onClose={onClose}
+      bare
+      ariaLabel="Invoice"
+      backdropClassName="print:static print:bg-transparent print:p-0"
+      className="flex max-h-full w-full max-w-md flex-col rounded-xl bg-white shadow-xl print:max-h-none print:max-w-none print:shadow-none"
+    >
       <style>{`@media print { @page { size: ${pageSize}; margin: 0; } }`}</style>
-      <div className="flex max-h-full w-full max-w-md flex-col rounded-xl bg-white shadow-xl print:max-h-none print:max-w-none print:shadow-none">
-        <div className="print-actions flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <h2 className="font-semibold text-slate-900">Invoice · {receipt.orderNumber}</h2>
-          <button type="button" onClick={onClose} aria-label="Close invoice" className="rounded p-1 hover:bg-slate-100"><X size={18} /></button>
-        </div>
-        <div className="print-actions flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm">
-            <select aria-label="Paper width" value={width} onChange={(event) => setWidth(event.target.value)} className="rounded border border-slate-300 px-2 py-1">
-              <option value="80mm">80mm</option>
-              <option value="58mm">58mm</option>
-            </select>
-        </div>
-        <div className="overflow-auto bg-slate-100 p-4 print:overflow-visible print:bg-white print:p-0">
-          <div id="pos-print-area" className="mx-auto bg-white p-2">
-            <Receipt receipt={receipt} />
-          </div>
-        </div>
-        <div className="print-actions flex flex-wrap justify-end gap-2 border-t border-slate-200 px-4 py-3">
-          <button type="button" onClick={printReceipt} className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"><Printer size={15} /> <T>{"Print Receipt"}</T></button>
+      <div className="print-actions flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <h2 className="font-semibold text-slate-900">Invoice · {receipt.orderNumber}</h2>
+        <button type="button" onClick={onClose} aria-label="Close invoice" className="rounded p-1 hover:bg-slate-100"><X size={18} /></button>
+      </div>
+      <div className="print-actions flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm">
+        <select aria-label="Paper width" value={width} onChange={(event) => setWidth(event.target.value)} className="rounded border border-slate-300 px-2 py-1">
+          <option value="80mm">80mm</option>
+          <option value="58mm">58mm</option>
+        </select>
+      </div>
+      <div className="overflow-auto bg-slate-100 p-4 print:overflow-visible print:bg-white print:p-0">
+        <div id="pos-print-area" className="mx-auto bg-white p-2">
+          <Receipt receipt={receipt} />
         </div>
       </div>
-    </div>
+      <div className="print-actions flex flex-wrap justify-end gap-2 border-t border-slate-200 px-4 py-3">
+        <button type="button" onClick={printReceipt} className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"><Printer size={15} /> <T>{"Print Receipt"}</T></button>
+      </div>
+    </Modal>
   );
 }
