@@ -38,7 +38,8 @@ describe('offline POS billing and session', () => {
 
     assert.match(authSource, /isOfflinePosUser\(data\.user\)/);
     assert.match(offlineSource, /if \(!offlineEnabled\)/);
-    assert.match(posSource, /Offline POS is available only for cashiers and outlet managers/);
+    assert.match(posSource, /getPosScreenState/);
+    assert.match(posSource, /<OfflineState state=\{screenState\}/);
     assert.match(billingSource, /Offline POS is available only for cashiers and outlet managers/);
   });
 

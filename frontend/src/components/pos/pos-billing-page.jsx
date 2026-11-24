@@ -3,7 +3,10 @@
 import {
   useCallback, useEffect, useRef, useState,
 } from 'react';
+import { useDispatch } from 'react-redux';
+import { useRouter } from 'next/navigation';
 import useAuth from '@/store/use-auth';
+import { expireOfflineSession, refreshSession } from '@/store/auth-slice';
 import usePosOutlet from '@/hooks/use-pos-outlet';
 import usePosOffline from '@/hooks/use-pos-offline';
 import usePosCart from '@/hooks/use-pos-cart';
@@ -21,27 +24,58 @@ import {
 import HoldSaleModal from './hold-sale-modal';
 import InvoiceModal from './invoice-modal';
 import ErrorToast from './error-toast';
+import OfflineState from '@/components/common/offline-state';
 import { T } from '@/i18n/language-provider';
 import offlinePosAccess from '@/services/offline-pos-access.cjs';
+import posScreenState from '@/services/pos-screen-state.cjs';
 
 const { isOfflinePosUser } = offlinePosAccess;
+const { getPosScreenState } = posScreenState;
 
 export default function PosBillingPage() {
+  const dispatch = useDispatch();
+  const router = useRouter();
   const {
-    initialized, token, user, hasPermission,
+    initialized, token, user, hasPermission, offlineSessionValid,
   } = useAuth();
   const canRead = hasPermission('pos:read');
   const canWrite = hasPermission('pos:write');
   const canApprove = user?.role === 'Super Admin';
   const offlinePosUser = isOfflinePosUser(user);
+  const [outletRefreshKey, setOutletRefreshKey] = useState(0);
   const {
     isSuperAdmin, outlets, selectedOutletId, setSelectedOutletId, loadingOutlets, outletError,
-  } = usePosOutlet();
+  } = usePosOutlet({ refreshKey: outletRefreshKey });
   const assignedOutletId = String(user?.locationId?._id || user?.locationId || '');
   const outletId = offlinePosUser ? assignedOutletId : (selectedOutletId || assignedOutletId);
   const {
-    online, catalog, queuedBills, syncResults, catalogError, syncing, queueOfflineBill,
+    online, browserOnline, apiReachable, catalog, queuedBills, syncResults, catalogError, syncing, queueOfflineBill,
   } = usePosOffline(outletId, user?.id, offlinePosUser);
+  const screenState = getPosScreenState({
+    browserOnline,
+    apiReachable,
+    userLoaded: Boolean(user),
+    isOfflinePosUser: offlinePosUser,
+    hasPosPermission: canRead,
+    offlineSessionValid,
+  });
+  const handleReconnect = useCallback(async () => {
+    if (screenState === 'session-expired') {
+      dispatch(expireOfflineSession());
+      router.replace('/login');
+      return;
+    }
+    setOutletRefreshKey((current) => current + 1);
+    try {
+      await dispatch(refreshSession()).unwrap();
+    } catch (error) {
+      if (error === 0 || error >= 500) {
+        window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: false }));
+        return false;
+      }
+    }
+    return true;
+  }, [dispatch, router, screenState]);
   const [toast, setToast] = useState('');
   const toastTimer = useRef(null);
   const showToast = useCallback((message) => {
@@ -71,8 +105,8 @@ export default function PosBillingPage() {
     setBillDiscount: cart.setBillDiscount,
   });
   useToastMessages({
-    success: billing.successMessage,
-    error: billing.checkoutError || billing.previewError,
+    success: screenState === 'ready' ? billing.successMessage : '',
+    error: screenState === 'ready' ? billing.checkoutError || billing.previewError : '',
   });
   useEffect(() => {
     const warnBeforeLeaving = (event) => {
@@ -86,17 +120,14 @@ export default function PosBillingPage() {
   }, [cart.items.length, queuedBills.length]);
 
   if (!initialized) return <p role="status" className="py-10 text-center"><T>{"Loading your POS session..."}</T></p>;
-  if (!token || !canRead) return <p role="alert" className="rounded bg-red-50 p-4 text-red-800"><T>{"You do not have permission to view the POS."}</T></p>;
-  if (!canWrite) return <p role="alert" className="rounded bg-red-50 p-4 text-red-800"><T>{"You do not have permission to complete POS sales."}</T></p>;
-  if (!offlinePosUser && !online) {
-    return (
-      <section className="mx-auto max-w-7xl">
-        <p role="alert" className="rounded-lg bg-amber-50 p-4 text-sm font-medium text-amber-900">
-          Offline POS is available only for cashiers and outlet managers. Connect to the internet to use POS.
-        </p>
-      </section>
-    );
+  if (screenState === 'offline-unavailable' || screenState === 'session-expired') {
+    return <OfflineState state={screenState} onReachable={handleReconnect} />;
   }
+  if (screenState === 'no-permission') {
+    return <p role="alert" className="rounded bg-red-50 p-4 text-red-800"><T>{"You do not have permission to view the POS."}</T></p>;
+  }
+  if (!token) return <p role="status" className="py-10 text-center"><T>{"Loading your POS session..."}</T></p>;
+  if (!canWrite) return <p role="alert" className="rounded bg-red-50 p-4 text-red-800"><T>{"You do not have permission to complete POS sales."}</T></p>;
 
   return (
     <section className="mx-auto max-w-7xl space-y-5">

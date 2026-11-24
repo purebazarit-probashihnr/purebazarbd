@@ -800,3 +800,8 @@
 	- Files: Shared `isOfflinePosUser` helper; POS/offline session/catalog/queue/held-bill guards; POS outlet and error handling; app-shell network badge and attendance widget; focused frontend tests and Bengali translations.
 	- Decisions: Offline POS is enabled only for a fixed-outlet Cashier, Outlet Cashier, or Outlet Manager who is not Super Admin and is not allowed to view all locations. Other users get no offline catalog, session, queue, or offline holding behavior and see one offline-POS access message. Fixed-outlet users use their login outlet without fetching the outlet list. API connection failures set the global badge Offline and attendance status fails silently.
 	- Validation: Backend Jest passes (53 suites, 412 tests); frontend production build passes; frontend tests pass 57/57. No database migration was run.
+
+- [x] Professional offline screen for POS
+	- Files: Shared POS screen-state decision and offline health monitor; reusable light/dark OfflineState card for POS and app-shell fallback; auth restore/session expiry handling; POS outlet retry; Bengali translations and focused frontend tests.
+	- Decisions: Permission denial is shown only after online user data loads; eligible users with a valid offline session retain selling access, while expired sessions require sign-in. Offline screens poll `/api/health`, respond to browser reconnects, and retry account/outlet loading without a full reload. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 412 tests); frontend production build passes; frontend tests pass 59/59.

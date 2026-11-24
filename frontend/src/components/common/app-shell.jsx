@@ -1,8 +1,7 @@
 ﻿'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import Header from './header';
 import Sidebar from './sidebar';
@@ -10,9 +9,15 @@ import {
   getCurrentSection, getPageKey, getRoutePermissions, navigationItems,
 } from './navigation';
 import useAuth from '@/store/use-auth';
-import { expireOfflineSession, refreshSession, restoreAuth } from '@/store/auth-slice';
+import {
+  expireOfflineSession, markOfflineSessionExpired, refreshSession, restoreAuth,
+} from '@/store/auth-slice';
 import { useLanguage } from '@/i18n/language-provider';
 import { getCurrentPosShift } from '@/services/pos-admin';
+import OfflineState from './offline-state';
+import offlinePosAccess from '@/services/offline-pos-access.cjs';
+
+const { isOfflinePosUser } = offlinePosAccess;
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
@@ -21,7 +26,7 @@ export default function AppShell({ children }) {
   const { t } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const {
-    initialized, isAuthenticated, canAccess, user, offlineSessionExpiresAt,
+    initialized, isAuthenticated, canAccess, user, offlineSessionValid, offlineSessionExpiresAt,
   } = useAuth();
   const canManageShifts = user?.permissions?.includes('*')
     || user?.permissions?.includes('shifts:manage');
@@ -35,7 +40,10 @@ export default function AppShell({ children }) {
   useEffect(() => {
     if (!isAuthenticated) return undefined;
     const refresh = () => dispatch(refreshSession()).unwrap().catch((error) => {
-      if (error === 0) setOnline(false);
+      if (error === 0 || error >= 500) {
+        setOnline(false);
+        window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: false }));
+      }
     });
     const timer = window.setInterval(refresh, 60000);
     window.addEventListener('focus', refresh);
@@ -49,8 +57,15 @@ export default function AppShell({ children }) {
     setOnline(navigator.onLine);
     const onOnline = () => {
       dispatch(refreshSession()).unwrap()
-        .then(() => setOnline(true))
-        .catch((error) => setOnline(error !== 0));
+        .then(() => {
+          setOnline(true);
+          window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: true }));
+        })
+        .catch((error) => {
+          const reachable = error !== 0 && error < 500;
+          setOnline(reachable);
+          window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: reachable }));
+        });
     };
     const onOffline = () => setOnline(false);
     const onNetworkStatus = (event) => setOnline(Boolean(event.detail));
@@ -96,7 +111,11 @@ export default function AppShell({ children }) {
   useEffect(() => {
     if (!offlineSessionExpiresAt) return undefined;
     const checkExpiry = () => {
-      if (Date.now() >= offlineSessionExpiresAt) {
+      if (Date.now() >= offlineSessionExpiresAt && offlineSessionValid) {
+        if (!online) {
+          dispatch(markOfflineSessionExpired());
+          return;
+        }
         dispatch(expireOfflineSession());
         router.replace('/login');
       }
@@ -104,7 +123,7 @@ export default function AppShell({ children }) {
     checkExpiry();
     const timer = window.setInterval(checkExpiry, 30000);
     return () => window.clearInterval(timer);
-  }, [dispatch, offlineSessionExpiresAt, router]);
+  }, [dispatch, offlineSessionExpiresAt, offlineSessionValid, online, router]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -119,6 +138,21 @@ export default function AppShell({ children }) {
   const posLocked = Boolean(user?.lockCashierToPos
     && user?.role !== 'Super Admin'
     && (!hasOtherModulePermission || shiftOpen));
+  const canUseOfflinePos = isOfflinePosUser(user)
+    && offlineSessionValid
+    && Number(offlineSessionExpiresAt) > Date.now();
+
+  const handleOfflineReconnect = useCallback(async () => {
+    try {
+      await dispatch(refreshSession()).unwrap();
+    } catch (error) {
+      if (error === 0 || error >= 500) {
+        window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: false }));
+        return false;
+      }
+    }
+    return true;
+  }, [dispatch]);
 
   useEffect(() => {
     if (posLocked && online && !['/orders/pos', '/orders/shifts'].includes(pathname)) {
@@ -133,15 +167,12 @@ export default function AppShell({ children }) {
   if (!isAuthenticated) return <main className="auth-status" role="status">{t('Redirecting to sign in...')}</main>;
   if (!online && pathname !== '/orders/pos') {
     return (
-      <main className="auth-status">
-        <section className="access-denied">
-          <h1>Offline</h1>
-          <p>This page needs an internet connection. Go back to POS.</p>
-          <Link className="mt-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2 font-medium text-white" href="/orders/pos">
-            Go back to POS
-          </Link>
-        </section>
-      </main>
+      <OfflineState
+        title="You're offline"
+        body="This page needs an internet connection."
+        showGoToPos={canUseOfflinePos}
+        onReachable={handleOfflineReconnect}
+      />
     );
   }
   const isAttendanceSelfService = pathname === '/payroll/attendance';

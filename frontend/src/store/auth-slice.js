@@ -29,6 +29,7 @@ const initialState = {
   status: 'idle',
   error: null,
   offlineSession: false,
+  offlineSessionValid: false,
   offlineSessionExpiresAt: null,
 };
 
@@ -67,6 +68,13 @@ export const restoreAuth = createAsyncThunk('auth/restore', async (_, { rejectWi
       user: data.user,
       offline: false,
       offlineExpiresAt: restoredOfflineExpiresAt,
+      offlineSessionValid: isOfflinePosUser(data.user)
+        && offlineSessionIsValid({
+          ...cachedSession,
+          token,
+          user: data.user,
+          loggedInAt: cachedSession?.loggedInAt || new Date().toISOString(),
+        }),
     };
   } catch (error) {
     if (error.response?.status === 401) {
@@ -75,23 +83,21 @@ export const restoreAuth = createAsyncThunk('auth/restore', async (_, { rejectWi
       setAuthToken(null);
       return null;
     }
-    if (!error.response) {
-      window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: false }));
+    if (error.response && error.response.status < 500) {
+      setAuthToken(null);
+      window.sessionStorage.removeItem('purebazar.authToken');
+      window.localStorage.removeItem(OFFLINE_SESSION_KEY);
+      return rejectWithValue(error.response.data?.message || 'Unable to verify your session.');
     }
-    if (!error.response
-      && isOfflinePosUser(cachedSession?.user)
-      && offlineSessionIsValid(cachedSession)) {
-      return {
-        token: cachedSession.token,
-        user: cachedSession.user,
-        offline: true,
-        offlineExpiresAt: offlineSessionExpiresAt(cachedSession),
-      };
-    }
-    setAuthToken(null);
-    window.sessionStorage.removeItem('purebazar.authToken');
-    window.localStorage.removeItem(OFFLINE_SESSION_KEY);
-    return rejectWithValue(error.response?.data?.message || 'Unable to verify your session. Check your connection and try again.');
+    window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: false }));
+    const cachedOfflineUser = isOfflinePosUser(cachedSession?.user);
+    return {
+      token,
+      user: cachedOfflineUser ? cachedSession.user : null,
+      offline: true,
+      offlineExpiresAt: cachedOfflineUser ? offlineSessionExpiresAt(cachedSession) : null,
+      offlineSessionValid: cachedOfflineUser && offlineSessionIsValid(cachedSession),
+    };
   }
 });
 
@@ -148,6 +154,9 @@ const authSlice = createSlice({
     offlineSessionExpired() {
       return { ...initialState, initialized: true };
     },
+    markOfflineSessionExpired(state) {
+      state.offlineSessionValid = false;
+    },
   },
   extraReducers(builder) {
     builder
@@ -162,6 +171,7 @@ const authSlice = createSlice({
         state.token = action.payload?.token || null;
         state.isAuthenticated = Boolean(action.payload);
         state.offlineSession = Boolean(action.payload?.offline);
+        state.offlineSessionValid = Boolean(action.payload?.offlineSessionValid);
         state.offlineSessionExpiresAt = action.payload?.offlineExpiresAt || null;
       })
       .addCase(restoreAuth.rejected, (state, action) => {
@@ -176,12 +186,19 @@ const authSlice = createSlice({
           if (!isOfflinePosUser(action.payload)) {
             window.localStorage.removeItem(OFFLINE_SESSION_KEY);
             state.offlineSession = false;
+            state.offlineSessionValid = false;
             state.offlineSessionExpiresAt = null;
           } else {
-            if (cachedSession) writeOfflineSession({ ...cachedSession, user: action.payload });
+            const refreshedSession = cachedSession
+              ? { ...cachedSession, user: action.payload }
+              : null;
+            if (refreshedSession) writeOfflineSession(refreshedSession);
             state.offlineSession = false;
-            state.offlineSessionExpiresAt = cachedSession
-              ? offlineSessionExpiresAt({ ...cachedSession, user: action.payload })
+            state.offlineSessionValid = Boolean(
+              refreshedSession && offlineSessionIsValid(refreshedSession),
+            );
+            state.offlineSessionExpiresAt = refreshedSession
+              ? offlineSessionExpiresAt(refreshedSession)
               : null;
           }
         }
@@ -206,7 +223,9 @@ const authSlice = createSlice({
         state.status = 'succeeded';
         state.error = null;
         state.offlineSession = false;
-        state.offlineSessionExpiresAt = offlineSessionExpiresAt(readOfflineSession());
+        const session = readOfflineSession();
+        state.offlineSessionValid = offlineSessionIsValid(session);
+        state.offlineSessionExpiresAt = offlineSessionExpiresAt(session);
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.status = 'failed';
@@ -231,5 +250,5 @@ export const expireOfflineSession = () => (dispatch) => {
   dispatch(authSlice.actions.offlineSessionExpired());
 };
 
-export const { clearAuthError } = authSlice.actions;
+export const { clearAuthError, markOfflineSessionExpired } = authSlice.actions;
 export default authSlice.reducer;

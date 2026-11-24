@@ -13,7 +13,9 @@ import {
 } from '@/services/pos-offline-storage';
 
 export default function usePosOffline(outletId, userId, offlineEnabled = true) {
-  const [browserOnline, setBrowserOnline] = useState(true);
+  const [browserOnline, setBrowserOnline] = useState(
+    () => (typeof navigator === 'undefined' ? true : navigator.onLine),
+  );
   const [networkAvailable, setNetworkAvailable] = useState(true);
   const [catalog, setCatalog] = useState(null);
   const [queuedBills, setQueuedBills] = useState([]);
@@ -75,7 +77,7 @@ export default function usePosOffline(outletId, userId, offlineEnabled = true) {
       setCatalogError('');
       return data;
     } catch (error) {
-      if (!error.response) reportNetwork(false);
+      if (!error.response || error.response.status >= 500) reportNetwork(false);
       const cached = await readPosCatalog(targetOutletId);
       setCatalog(cached || null);
       setCatalogError(cached
@@ -111,7 +113,7 @@ export default function usePosOffline(outletId, userId, offlineEnabled = true) {
         setSyncResults((current) => [{
           offlineNumber: bill.offlineNumber, status: 'failed', detail,
         }, ...current].slice(0, 20));
-        if (!error.response) {
+        if (!error.response || error.response.status >= 500) {
           reportNetwork(false);
           break;
         }
@@ -156,15 +158,17 @@ export default function usePosOffline(outletId, userId, offlineEnabled = true) {
     const onOffline = () => setBrowserOnline(false);
     const onOnline = async () => {
       setBrowserOnline(true);
-      reportNetwork(true);
       const fresh = await refreshCatalog(outletId);
       if (fresh) await syncPending(outletId);
     };
+    const onNetworkStatus = (event) => setNetworkAvailable(Boolean(event.detail));
     window.addEventListener('offline', onOffline);
     window.addEventListener('online', onOnline);
+    window.addEventListener('purebazar:network-status', onNetworkStatus);
     return () => {
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('online', onOnline);
+      window.removeEventListener('purebazar:network-status', onNetworkStatus);
     };
   }, [outletId, refreshCatalog, reportNetwork, syncPending]);
 
@@ -181,6 +185,8 @@ export default function usePosOffline(outletId, userId, offlineEnabled = true) {
 
   return {
     online,
+    browserOnline,
+    apiReachable: networkAvailable,
     catalog,
     queuedBills,
     syncResults,
