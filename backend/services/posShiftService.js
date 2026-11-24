@@ -26,7 +26,16 @@ async function findPayments(shift, closedAt) {
     cashier: shift.cashierId,
     outlet: shift.outletId,
     paymentStatus: 'PAID',
-    createdAt: { $gte: shift.openedAt, $lte: closedAt },
+    $or: [
+      {
+        offlineId: { $exists: false },
+        createdAt: { $gte: shift.openedAt, $lte: closedAt },
+      },
+      {
+        offlineId: { $exists: true },
+        soldAt: { $gte: shift.openedAt, $lte: closedAt },
+      },
+    ],
   }).lean();
   const totals = new Map(PAYMENT_METHODS.map(([, code]) => [code, 0]));
   orders.forEach((order) => {
@@ -34,11 +43,11 @@ async function findPayments(shift, closedAt) {
       totals.set(payment.method, money((totals.get(payment.method) || 0) + payment.amount));
     });
   });
-  return totals;
+  return { totals };
 }
 
 async function buildReport(shift, closedAt = shift.closedAt || new Date()) {
-  const totals = await findPayments(shift, closedAt);
+  const { totals } = await findPayments(shift, closedAt);
   const cashSales = totals.get('CASH') || 0;
   const expectedCash = money(shift.openingCash + cashSales);
   const paymentSummary = PAYMENT_METHODS.map(([method, code]) => {

@@ -68,7 +68,7 @@ export default function CameraBarcodeScanner({ onScan, disabled = false }) {
 
   return (
     <>
-      <span className="block shrink-0 md:hidden">
+      <span className="block shrink-0 lg:hidden">
         <button
           type="button"
           onClick={() => setOpen(true)}

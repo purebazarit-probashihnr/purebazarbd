@@ -34,6 +34,10 @@ const billSchema = Joi.object({
   discountApproved: Joi.boolean(),
   outletId: Joi.string().hex().length(24),
   offlineId: Joi.string().trim().min(1).max(120),
+  offlineNumber: Joi.string().trim().min(1).max(120),
+  walletOffline: Joi.boolean(),
+  walletMemberId: Joi.string().trim().min(1).max(100).allow(''),
+  walletReference: Joi.string().trim().min(1).max(120).allow(''),
   soldAt: Joi.date().iso(),
 }).unknown(false);
 
@@ -159,6 +163,7 @@ function receiptData(order) {
     grandTotal: order.grandTotal,
     payments: order.payments,
     memberId: order.memberId || null,
+    walletOffline: order.walletOffline === true,
   };
 }
 

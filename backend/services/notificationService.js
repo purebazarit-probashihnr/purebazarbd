@@ -12,12 +12,31 @@ const can = (user, permission) => {
 
 const asList = async (query) => (query && typeof query.lean === 'function' ? query.lean() : query);
 
+function notificationId(type, row) {
+  const identity = type === 'LOW_STOCK'
+    ? `${row.productId}:${row.locationId}`
+    : String(row._id);
+  return `${type}:${identity}`;
+}
+
+function newerRow(candidate, current) {
+  const candidateTime = new Date(candidate.createdAt || 0).getTime();
+  const currentTime = new Date(current.createdAt || 0).getTime();
+  return Number.isFinite(candidateTime) && candidateTime > currentTime;
+}
+
 function group(key, type, label, href, severity, rows, describe) {
-  const list = rows || [];
+  const uniqueRows = new Map();
+  (rows || []).forEach((row) => {
+    const id = notificationId(type, row);
+    const current = uniqueRows.get(id);
+    if (!current || newerRow(row, current)) uniqueRows.set(id, row);
+  });
+  const list = [...uniqueRows.values()];
   return {
     key, type, label, href, severity, count: list.length,
     items: list.slice(0, ITEM_LIMIT).map((row) => ({
-      id: String(row._id || row.productId),
+      id: notificationId(type, row),
       title: describe(row),
       href,
       createdAt: row.createdAt || null,

@@ -25,7 +25,7 @@ function Report({ shift, report }) {
   }));
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card><small className="text-slate-500"><T>{"Opening cash"}</T></small><strong className="mt-1 block text-lg">{amount(shift.openingCash)}</strong></Card>
         <Card><small className="text-slate-500"><T>{"Expected cash"}</T></small><strong className="mt-1 block text-lg">{amount(report.expectedCash)}</strong></Card>
         <Card><small className="text-slate-500"><T>{"Cash difference"}</T></small><strong className="mt-1 block text-lg">{amount(report.cashDifference)}</strong></Card>
@@ -82,6 +82,7 @@ export default function ShiftClosePage() {
     try {
       const { data } = await getCurrentPosShift(selectedOutletId);
       setShift(data.shift);
+      window.dispatchEvent(new CustomEvent('purebazar:shift-state', { detail: true }));
       setReport(data.report);
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to load the current shift.');
@@ -143,6 +144,7 @@ export default function ShiftClosePage() {
       setClosedShift(data.shift);
       setClosedReport(data.report);
       setShift(null);
+      window.dispatchEvent(new CustomEvent('purebazar:shift-state', { detail: false }));
       setReport(null);
       setActualCash('');
       setNotice('Shift closed. Review the final tender reconciliation below.');

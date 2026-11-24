@@ -8,11 +8,12 @@ import { useSelector } from 'react-redux';
 import { Badge, Button, Card, Input, Select } from '@/components/ui';
 import VendorCombobox from '@/components/inventory/vendor-combobox';
 import {
-  createGoodsReceive, getLocations, getNextChallanNumber, getReceiveVendors, getWarehouseStock, searchReceiveProducts,
+  createGoodsReceive, createReceiveVendorCopy, getLocations, getNextChallanNumber, getReceiveVendors, getWarehouseStock, searchReceiveProducts,
 } from '@/services/stock';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
-import { isGram, productLabel, stockText } from '@/services/stock-units.cjs';
+import { productLabel, stockText } from '@/services/stock-units.cjs';
+import { addReceiveProductLine } from '@/services/goods-receive-utils.cjs';
 import CameraBarcodeScanner from '@/components/common/camera-barcode-scanner';
 
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
@@ -38,6 +39,8 @@ export default function GoodsReceiveForm() {
   const [challan, setChallan] = useState('');
   const [search, setSearch] = useState('');
   const [matches, setMatches] = useState([]);
+  const [otherVendorMatches, setOtherVendorMatches] = useState([]);
+  const [copyingProductId, setCopyingProductId] = useState('');
   const [lines, setLines] = useState([]);
 
   useEffect(() => {
@@ -90,6 +93,7 @@ export default function GoodsReceiveForm() {
     const term = search.trim();
     if (!token || (isVendor && !vendorId) || (!isVendor && term.length < 2)) {
       setMatches([]);
+      setOtherVendorMatches([]);
       setSearchError('');
       return undefined;
     }
@@ -104,6 +108,7 @@ export default function GoodsReceiveForm() {
           if (!active) return;
           setSearchError('');
           setMatches(response.data.products);
+          setOtherVendorMatches(response.data.otherVendorMatches || []);
         })
         .catch((requestError) => active && setSearchError(
           requestError.response?.data?.message || 'Unable to search products.',
@@ -131,20 +136,30 @@ export default function GoodsReceiveForm() {
   const activeVendors = vendors.filter((vendor) => vendor.status === 'Active');
 
   function addProduct(product) {
-    setLines((current) => {
-      if (current.some((line) => line.productId === product.id)) return current;
-      return [...current, {
-        productId: product.id,
-        productName: productLabel(product),
-        barcode: product.barcode,
-        isWeightBased: Boolean(product.isWeightBased) || isGram(product.packageUnitName),
-        receivedQuantity: 1,
-        acceptedQuantity: 1,
-        rejectedQuantity: 0,
-      }];
-    });
+    setLines((current) => addReceiveProductLine(current, product));
     setSearch('');
     if (ownerType !== 'VENDOR') setMatches([]);
+    setOtherVendorMatches([]);
+  }
+
+  async function addOtherVendorProduct(product) {
+    if (!vendorId || copyingProductId) return;
+    setCopyingProductId(product.id);
+    setSearchError('');
+    try {
+      const { data } = await createReceiveVendorCopy(token, {
+        sourceProductId: product.id,
+        vendorId,
+        vendorPrice: product.vendorPrice,
+        mrp: product.mrp,
+      });
+      addProduct(data.product);
+      setOtherVendorMatches([]);
+    } catch (requestError) {
+      setSearchError(requestError.response?.data?.message || 'Unable to add this product for the selected vendor.');
+    } finally {
+      setCopyingProductId('');
+    }
   }
 
   function updateLine(productId, field, value) {
@@ -236,6 +251,7 @@ export default function GoodsReceiveForm() {
                 setLines([]);
                 setSearch('');
                 setMatches([]);
+                setOtherVendorMatches([]);
               }}
             >
               {locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -257,6 +273,7 @@ export default function GoodsReceiveForm() {
               setChallan('');
               setLines([]);
               setMatches([]);
+              setOtherVendorMatches([]);
               setSearch('');
             }}
           >
@@ -309,6 +326,21 @@ export default function GoodsReceiveForm() {
           <Search size={16} aria-hidden="true" className="pointer-events-none relative -mt-7 ml-auto mr-3 text-slate-400" />
         </div>
         {searchError && <p role="alert" className="mt-3 text-sm text-red-700">{searchError}</p>}
+        {ownerType === 'VENDOR' && otherVendorMatches.map((product) => (
+          <div key={product.id} className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm text-amber-950">
+              This item exists under {product.vendorName}. Add it for the selected vendor with the same details?
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              disabled={Boolean(copyingProductId)}
+              onClick={() => addOtherVendorProduct(product)}
+            >
+              {copyingProductId === product.id ? 'Adding...' : `Add for ${activeVendors.find((vendor) => vendor.id === vendorId)?.shopName || 'current vendor'}`}
+            </Button>
+          </div>
+        ))}
         {(ownerType === 'VENDOR' ? Boolean(vendorId) : search.trim().length >= 2) && (
           <div className="mt-3 max-h-80 max-w-lg overflow-y-auto rounded border border-slate-200">
             {matches.length ? matches.map((product) => (
@@ -321,7 +353,7 @@ export default function GoodsReceiveForm() {
               >
                 <span>
                   <strong className="block text-sm text-slate-800">                  {productLabel(product)}</strong>
-                  <small className="text-slate-500">{product.barcode}</small>
+                  <small className="text-slate-500">{product.barcode} {product.vendorName ? `· ${product.vendorName}` : ''}</small>
                 </span>
                 <span className="whitespace-nowrap text-xs text-slate-500">
                   Stock: {stockText(stockByProduct.get(product.id) ?? 0, product)}
@@ -345,6 +377,7 @@ export default function GoodsReceiveForm() {
                 <tr key={line.productId}>
                   <td>
                     <strong className="block">{line.productName}</strong>
+                    {line.vendorName && <small className="block text-indigo-700">{line.vendorName}</small>}
                     {line.isWeightBased && <small className="block text-amber-700">Enter quantities in Kg</small>}
                     <small className="text-slate-500">{line.barcode}</small>
                   </td>

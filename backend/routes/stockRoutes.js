@@ -4,6 +4,7 @@ const goodsReceiveController = require('../controllers/goodsReceiveController');
 const locationRoutes = require('./locationRoutes');
 const stockController = require('../controllers/stockController');
 const stockTransferController = require('../controllers/stockTransferController');
+const stockTransferChallanController = require('../controllers/stockTransferChallanController');
 const stockAdjustmentController = require('../controllers/stockAdjustmentController');
 const stockCountController = require('../controllers/stockCountController');
 const authMiddleware = require('../middlewares/authMiddleware');
@@ -70,8 +71,10 @@ const adminApproval = [authMiddleware, authorizeMiddleware({ roles: ['Super Admi
 router.get('/stock', [...read, enforceLocationScope.forStockRead], [
   query('warehouseId').isMongoId().withMessage('A valid warehouse ID is required'),
 ], validateRequest, stockController.getWarehouseStock);
+router.get('/stock/central-warehouse', [...read, enforceLocationScope.forStockRead], stockController.getCentralWarehouseStock);
 router.get('/inventory/outlet-products', [...read, enforceLocationScope.forStockRead], [
   query('warehouseId').optional().isMongoId().withMessage('A valid warehouse or outlet ID is required'),
+  query('allLocations').optional().isBoolean().withMessage('allLocations must be true or false'),
 ], validateRequest, stockController.getOutletProducts);
 router.get('/stock-adjustments', [...read, enforceLocationScope], [
   query('selectedOutletId').optional({ values: 'falsy' }).isMongoId()
@@ -137,6 +140,14 @@ router.get('/stock-transfers/:id', [
   authMiddleware, enforceLocationScope, authorizeMiddleware({ permissions: ['stock:transfer:read'] }),
   transferId,
 ], validateRequest, stockTransferController.getTransfer);
+router.get('/stock-transfers/:id/challan', [
+  authMiddleware, enforceLocationScope, authorizeMiddleware({ permissions: ['stock:transfer:read'] }),
+  transferId,
+], validateRequest, stockTransferChallanController.getTransferChallan);
+router.post('/stock-transfers/:id/challan/print', [
+  authMiddleware, enforceLocationScope, authorizeMiddleware({ permissions: ['stock:transfer:read'] }),
+  transferId,
+], validateRequest, stockTransferChallanController.printTransferChallan);
 router.post('/stock-transfers/:id/dispatch', [
   authMiddleware, enforceLocationScope, authorizeMiddleware({ permissions: ['stock:transfer:write'] }),
   transferId,
@@ -144,6 +155,14 @@ router.post('/stock-transfers/:id/dispatch', [
   transferProduct,
   body('lines.*.dispatchedQuantity').isFloat({ min: 0 }).toFloat()
     .withMessage('Dispatched quantity must be zero or greater'),
+  body('carrierName').isString().trim().isLength({ min: 1, max: 120 })
+    .withMessage('Carrier name is required and must be at most 120 characters'),
+  body('carrierPhone').isString().trim().isLength({ min: 1, max: 40 })
+    .withMessage('Carrier phone is required and must be at most 40 characters'),
+  body('vehicle').optional({ values: 'falsy' }).isString().trim().isLength({ max: 120 })
+    .withMessage('Vehicle must be at most 120 characters'),
+  body('notes').optional({ values: 'falsy' }).isString().trim().isLength({ max: 500 })
+    .withMessage('Notes must be at most 500 characters'),
 ], validateRequest, stockTransferController.dispatchTransfer);
 router.post('/stock-transfers/:id/receive', [
   authMiddleware, enforceLocationScope, authorizeMiddleware({ permissions: ['stock:transfer:receive'] }),
@@ -184,6 +203,13 @@ router.post('/goods-receives', scopedWrite, [
   lineQuantity('rejectedQuantity', 0),
   lineQuantities,
 ], validateRequest, goodsReceiveController.createGoodsReceive);
+router.post('/goods-receives/vendor-copy', scopedWrite, [
+  body('sourceProductId').isMongoId().withMessage('A valid source product ID is required'),
+  body('vendorId').isMongoId().withMessage('A valid vendor ID is required'),
+  body('vendorPrice').isFloat({ min: 0 }).toFloat().withMessage('Vendor price must be zero or greater'),
+  body('mrp').isFloat({ min: 0 }).toFloat().custom((value, { req }) => value >= Number(req.body.vendorPrice))
+    .withMessage('MRP must be greater than or equal to vendor price'),
+], validateRequest, goodsReceiveController.createReceiveVendorCopy);
 router.get('/goods-receives/:id', scopedRead, [id], validateRequest, goodsReceiveController.getGoodsReceive);
 router.get('/goods-receives/:id/print', scopedRead, [id], validateRequest, goodsReceiveController.getGoodsReceive);
 router.put('/goods-receives/:id', scopedWrite, [

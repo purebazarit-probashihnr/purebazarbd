@@ -18,6 +18,7 @@ export default function BarcodesPage() {
   const [products, setProducts] = useState([]);
   const [queue, setQueue] = useState([]);
   const [search, setSearch] = useState('');
+  const [printAll, setPrintAll] = useState(false);
   const [labelType, setLabelType] = useState('price');
   const [sizeKey, setSizeKey] = useState(DEFAULT_LABEL_SIZE);
   const [loading, setLoading] = useState(true);
@@ -41,10 +42,13 @@ export default function BarcodesPage() {
 
   const visibleProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const printable = printAll ? products : products.filter((product) => (
+      product.barcodeSource === 'internal' || (!product.barcodeSource && String(product.barcode || '').startsWith('PB'))
+    ));
     return query
-      ? products.filter((product) => `${product.name} ${product.barcode}`.toLowerCase().includes(query))
-      : products;
-  }, [products, search]);
+      ? printable.filter((product) => `${product.name} ${product.barcode} ${(product.barcodes || []).join(' ')}`.toLowerCase().includes(query))
+      : printable;
+  }, [printAll, products, search]);
   const queuedProducts = useMemo(() => queue.map((item) => {
     const product = products.find((entry) => entry.id === item.productId);
     if (!product) return null;
@@ -138,11 +142,15 @@ export default function BarcodesPage() {
         <p className="mt-1 text-sm text-slate-600"><T>{"Select products and label quantities, then preview, print, or export printer commands."}</T></p>
       </header>
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-        <Card className="min-w-0" title="Product catalog" description={`${products.length} products available`}>
+        <Card className="min-w-0" title="Product catalog" description={`${visibleProducts.length} products available`}>
           <div className="mb-4 flex w-full max-w-xl flex-col gap-2 sm:flex-row sm:items-end">
             <div className="w-full min-w-0 flex-1"><Input label="Search products" name="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Product name or barcode" /></div>
             <div className="w-full sm:w-auto [&>span>button]:w-full sm:[&>span>button]:w-11"><CameraBarcodeScanner onScan={setSearch} /></div>
           </div>
+          <label className="mb-3 flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={printAll} onChange={(event) => setPrintAll(event.target.checked)} />
+            Print all barcodes (including manufacturer codes)
+          </label>
           <div className="block w-full min-w-0 overflow-x-auto"><Table columns={columns} rows={visibleProducts} rowKey="id" emptyMessage="No products match your search." /></div>
         </Card>
         <Card className="min-w-0" title="Label batch" description="Add products more than once or adjust the number of copies.">

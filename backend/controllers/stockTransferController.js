@@ -1,33 +1,11 @@
 const mongoose = require('mongoose');
 const {
-  AuditLog, Location, Product, StockMovement, StockTransfer, User,
+  AuditLog, Location, Product, StockMovement, StockTransfer,
 } = require('../models');
-const { unitLabelMap } = require('../utils/productDisplay');
 const { isSuperAdmin } = require('../utils/locationScope');
-
-function statusError(message, status) {
-  const error = new Error(message);
-  error.status = status;
-  return error;
-}
-
-function locationFilter(req) {
-  if (isSuperAdmin(req.user) || req.user.canViewAllLocations) {
-    if (!req.locationId) return {};
-    return {
-      $or: [
-        { fromWarehouseId: req.locationId },
-        { toWarehouseId: req.locationId },
-      ],
-    };
-  }
-  return {
-    $or: [
-      { fromWarehouseId: req.locationId },
-      { toWarehouseId: req.locationId },
-    ],
-  };
-}
+const {
+  loadScopedTransfer, locationFilter, statusError, transferOutputs,
+} = require('../services/stockTransferService');
 
 function canManageSource(req, locationId) {
   return isSuperAdmin(req.user)
@@ -48,76 +26,6 @@ function normalizeRequestedLines(lines) {
     combined.set(productId, (combined.get(productId) || 0) + Number(line.requestedQuantity));
   }
   return [...combined].map(([productId, requestedQuantity]) => ({ productId, requestedQuantity }));
-}
-
-function transferOutput(transfer, productsById, receiverNames) {
-  const data = transfer.toObject ? transfer.toObject() : transfer;
-  const receivedBy = data.receivedBy?.toString() || null;
-  return {
-    id: data._id.toString(),
-    fromWarehouseId: data.fromWarehouseId.toString(),
-    toWarehouseId: data.toWarehouseId.toString(),
-    status: data.status,
-    createdBy: data.createdBy?.toString(),
-    dispatchedBy: data.dispatchedBy?.toString() || null,
-    receivedBy,
-    receivedByName: receivedBy ? receiverNames.get(receivedBy) || null : null,
-    dispatchedAt: data.dispatchedAt || null,
-    receivedAt: data.receivedAt || null,
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-    lines: data.lines.map((line) => {
-      const productId = line.productId.toString();
-      const product = productsById.get(productId);
-      return {
-        productId,
-        productName: product?.name || null,
-        barcode: product?.barcode || null,
-        isWeightBased: Boolean(product?.isWeightBased),
-        requestedQuantity: line.requestedQuantity,
-        dispatchedQuantity: line.dispatchedQuantity ?? null,
-        receivedQuantity: line.receivedQuantity ?? null,
-        discrepancyQuantity: line.discrepancyQuantity ?? null,
-      };
-    }),
-  };
-}
-
-async function transferOutputs(transfers) {
-  const items = Array.isArray(transfers) ? transfers : [transfers];
-  const productIds = [...new Set(items.flatMap((transfer) => {
-    const data = transfer.toObject ? transfer.toObject() : transfer;
-    return data.lines.map((line) => line.productId.toString());
-  }))];
-  const products = await Product.find({ _id: { $in: productIds } }).select('_id name barcode unitId').lean();
-  const labels = await unitLabelMap(products);
-  const productsById = new Map(products.map((product) => [product._id.toString(), {
-    ...product,
-    isWeightBased: /^(gram|grams|g)$/i.test(String(labels.names.get(product.unitId?.toString()) || '').trim()),
-  }]));
-  const receiverIds = [...new Set(items.map((transfer) => {
-    const data = transfer.toObject ? transfer.toObject() : transfer;
-    return data.receivedBy?.toString();
-  }).filter(Boolean))];
-  const receivers = receiverIds.length
-    ? await User.find({ _id: { $in: receiverIds } }).select('_id name').lean()
-    : [];
-  const receiverNames = new Map(receivers.map((user) => [user._id.toString(), user.name]));
-  return items.map((transfer) => transferOutput(transfer, productsById, receiverNames));
-}
-
-async function loadScopedTransfer(id, req, session, { allowAllLocationReceipt = false } = {}) {
-  const canLoadAnyForReceipt = allowAllLocationReceipt
-    && req.user.canViewAllLocations
-    && req.user.permissions.includes('stock:transfer:receive');
-  let query = StockTransfer.findOne({
-    _id: id,
-    ...(canLoadAnyForReceipt ? {} : locationFilter(req)),
-  });
-  if (session) query = query.session(session);
-  const transfer = await query;
-  if (!transfer) throw statusError('Stock transfer not found', 404);
-  return transfer;
 }
 
 async function createTransfer(req, res, next) {
@@ -250,6 +158,10 @@ async function dispatchTransfer(req, res, next) {
       transfer.status = 'Dispatched';
       transfer.dispatchedBy = req.user._id;
       transfer.dispatchedAt = new Date();
+      transfer.carrierName = req.body.carrierName.trim();
+      transfer.carrierPhone = req.body.carrierPhone.trim();
+      transfer.vehicle = req.body.vehicle?.trim() || '';
+      transfer.notes = req.body.notes?.trim() || '';
       await transfer.save({ session });
       const movements = transfer.lines
         .filter((line) => line.dispatchedQuantity > 0)

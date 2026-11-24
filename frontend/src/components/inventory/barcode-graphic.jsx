@@ -1,13 +1,14 @@
-import { getEan13Modules } from '@/services/barcodeEngine';
+import { getBarcodeModules } from '@/services/barcodeEngine';
 
 export default function BarcodeGraphic({ value }) {
-  const modules = getEan13Modules(value);
+  const modules = getBarcodeModules(value);
+  const guard = modules.length === 95 || modules.length === 67;
   return (
     <svg
       className="barcode-graphic"
       viewBox={`0 0 ${modules.length} 52`}
       role="img"
-      aria-label={`EAN-13 barcode ${value}`}
+      aria-label={`Barcode ${value}`}
       shapeRendering="crispEdges"
     >
       {modules.map((isBar, index) => isBar && (
@@ -16,11 +17,11 @@ export default function BarcodeGraphic({ value }) {
           x={index}
           y={0}
           width={1}
-          height={index < 3 || (index >= 45 && index < 50) || index >= 92 ? 43 : 38}
+          height={guard && (index < 3 || (modules.length === 95 && index >= 45 && index < 50) || index >= modules.length - 3) ? 43 : 38}
           fill="#111827"
         />
       ))}
-      <text x="47.5" y="51" textAnchor="middle" fontSize="7" fill="#111827">{value}</text>
+      <text x={modules.length / 2} y="51" textAnchor="middle" fontSize={modules.length > 130 ? '5' : '7'} fill="#111827">{value}</text>
     </svg>
   );
 }

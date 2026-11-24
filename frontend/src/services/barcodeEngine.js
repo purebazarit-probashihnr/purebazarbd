@@ -13,6 +13,19 @@ const EAN_RIGHT = [
   '1001110', '1010000', '1000100', '1001000', '1110100',
 ];
 const EAN_PARITY = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'];
+const CODE128_PATTERNS = [
+  '212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312', '132212', '221213',
+  '221312', '231212', '112232', '122132', '122231', '113222', '123122', '123221', '223211', '221132',
+  '221231', '213212', '223112', '312131', '311222', '321122', '321221', '312212', '322112', '322211',
+  '212123', '212321', '232121', '111323', '131123', '131321', '112313', '132113', '132311', '211313',
+  '231113', '231311', '112133', '112331', '132131', '113123', '113321', '133121', '313121', '211331',
+  '231131', '213113', '213311', '213131', '311123', '311321', '331121', '312113', '312311', '332111',
+  '314111', '221411', '431111', '111224', '111422', '121124', '121421', '141122', '141221', '112214',
+  '112412', '122114', '122411', '142112', '142211', '241211', '221114', '413111', '241112', '134111',
+  '111242', '121142', '121241', '114212', '124112', '124211', '411212', '421112', '421211', '212141',
+  '214121', '412121', '111143', '111341', '131141', '114113', '114311', '411113', '411311', '113141',
+  '114131', '311141', '411131', '211412', '211214', '211232', '2331112',
+];
 
 function isValidEan13(value) {
   if (!/^\d{13}$/.test(String(value || ''))) return false;
@@ -21,6 +34,69 @@ function isValidEan13(value) {
     total + digit * (index % 2 === 0 ? 1 : 3)
   ), 0);
   return (10 - (sum % 10)) % 10 === digits[12];
+}
+
+function isValidEan8(value) {
+  const text = String(value || '');
+  if (!/^\d{8}$/.test(text)) return false;
+  const digits = [...text].map(Number);
+  const sum = digits.slice(0, 7).reduce((total, digit, index) => total + digit * (index % 2 === 0 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === digits[7];
+}
+
+function isValidUpcA(value) {
+  const text = String(value || '');
+  if (!/^\d{12}$/.test(text)) return false;
+  const digits = [...text].map(Number);
+  const sum = digits.slice(0, 11).reduce((total, digit, index) => total + digit * (index % 2 === 0 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === digits[11];
+}
+
+function isValidRetailBarcode(value) {
+  return isValidEan13(value) || isValidEan8(value) || isValidUpcA(value);
+}
+
+function retailBarcodeWarning(value) {
+  const text = String(value || '').trim();
+  if (!text || text.startsWith('PB')) return '';
+  const warnings = [];
+  if (text.startsWith('29')) {
+    warnings.push('This code starts with 29, a range reserved for in-store codes; check that it is the manufacturer\'s code');
+  }
+  if (/^\d{8}$/.test(text) && !isValidEan8(text)) warnings.push('EAN-8 check digit is invalid.');
+  if (/^\d{12}$/.test(text) && !isValidUpcA(text)) warnings.push('UPC-A check digit is invalid.');
+  if (/^\d{13}$/.test(text) && !isValidEan13(text)) warnings.push('EAN-13 check digit is invalid.');
+  return warnings.join(' ');
+}
+
+function findInternalBarcodeConflict(products, productGroupId, productId) {
+  return (products || []).find((product) => {
+    if (product.id === productId) return false;
+    const internal = product.barcodeSource === 'internal'
+      || (!product.barcodeSource && String(product.barcode || '').startsWith('PB'));
+    const existingGroupId = product.productGroupId || product.id;
+    return internal && (!productGroupId || existingGroupId !== productGroupId);
+  }) || null;
+}
+
+function barcodeSourceForEntry(value) {
+  return String(value || '').trim() ? 'manufacturer' : 'internal';
+}
+
+function getEan8Modules(barcode) {
+  if (!isValidEan8(barcode)) throw new Error('A valid EAN-8 barcode is required.');
+  const digits = String(barcode).split('').map(Number);
+  const left = digits.slice(0, 4).map((digit) => EAN_LEFT[digit]).join('');
+  const right = digits.slice(4).map((digit) => EAN_RIGHT[digit]).join('');
+  return `101${left}01010${right}101`.split('').map((module) => module === '1');
+}
+
+function getBarcodeModules(value) {
+  const text = String(value || '');
+  if (isValidEan13(text)) return getEan13Modules(text);
+  if (isValidUpcA(text)) return getEan13Modules(`0${text}`);
+  if (isValidEan8(text)) return getEan8Modules(text);
+  return getCode128Modules(text);
 }
 
 function getEan13Modules(barcode) {
@@ -32,6 +108,25 @@ function getEan13Modules(barcode) {
   )).join('');
   const right = digits.slice(7).map((digit) => EAN_RIGHT[digit]).join('');
   return `101${middle}01010${right}101`.split('').map((module) => module === '1');
+}
+
+function getCode128Modules(value) {
+  const text = String(value || '');
+  if (!text || !/^[\x20-\x7E]+$/.test(text)) {
+    throw new Error('Code 128 requires non-empty printable ASCII text.');
+  }
+  const codes = [104, ...Array.from(text, (character) => character.charCodeAt(0) - 32)];
+  const checksum = codes.reduce((sum, code, index) => sum + (index ? code * index : code), 0) % 103;
+  codes.push(checksum, 106);
+  const modules = [];
+  codes.forEach((code) => {
+    let isBar = true;
+    for (const width of CODE128_PATTERNS[code]) {
+      for (let index = 0; index < Number(width); index += 1) modules.push(isBar);
+      isBar = !isBar;
+    }
+  });
+  return modules;
 }
 
 function safeText(value) {
@@ -64,7 +159,10 @@ function normalizeLabels(items, labelType) {
   if (!Array.isArray(items) || items.length === 0) throw new Error('Select at least one product to print.');
   const labels = [];
   for (const item of items) {
-    if (!isValidEan13(item.barcode)) throw new Error(`Product "${item.name}" has an invalid EAN-13 barcode.`);
+    const barcode = String(item.barcode || '');
+    if (!barcode || !/^[\x20-\x7E]+$/.test(barcode)) {
+      throw new Error(`Product "${item.name}" has an invalid barcode.`);
+    }
     const copies = Number(item.copies ?? 1);
     if (!Number.isInteger(copies) || copies < 1 || copies > 500) {
       throw new Error('Label copies must be a whole number from 1 to 500.');
@@ -78,7 +176,7 @@ function normalizeLabels(items, labelType) {
     }
     const label = {
       name: labelName(item.name, unitName, item.packageTag),
-      barcode: String(item.barcode),
+      barcode,
       price,
       originalPrice,
     };
@@ -109,7 +207,7 @@ function buildTspl(labels, size) {
     'CLS',
     `TEXT ${size.x},${size.brandY},"${size.key === '50x30' ? '3' : '0'}",0,1,1,"${BRAND_NAME}"`,
     `TEXT ${size.x},${size.nameY},"0",0,1,1,"${name}"`,
-    `BARCODE ${barX},${size.barY},"EAN13",${size.barH},1,0,2,2,"${barcode}"`,
+    `BARCODE ${barX},${size.barY},"${isValidEan13(barcode) ? 'EAN13' : isValidUpcA(barcode) ? 'UPCA' : isValidEan8(barcode) ? 'EAN8' : '128'}",${size.barH},1,0,2,2,"${barcode}"`,
     ...(originalPrice ? [
       `TEXT ${size.x},${size.origY},"0",0,1,1,"BDT ${originalPrice}"`,
       `BAR ${size.x},${size.origY + 8},${(originalPrice.length + 4) * 8},2`,
@@ -136,7 +234,16 @@ function buildEscPos(labels) {
     }
     if (price) appendText(`BDT ${price}\n`);
     output.push(0x1d, 0x48, 0x02, 0x1d, 0x77, 0x02, 0x1d, 0x68, 0x50);
-    output.push(0x1d, 0x6b, 0x43, 0x0c, ...encoder.encode(barcode.slice(0, 12)), 0x0a, 0x0a);
+    if (isValidEan13(barcode)) {
+      output.push(0x1d, 0x6b, 0x43, 0x0c, ...encoder.encode(barcode.slice(0, 12)), 0x0a);
+    } else if (isValidUpcA(barcode)) {
+      output.push(0x1d, 0x6b, 0x41, 0x0b, ...encoder.encode(barcode.slice(0, 11)), 0x0a);
+    } else if (isValidEan8(barcode)) {
+      output.push(0x1d, 0x6b, 0x45, 0x07, ...encoder.encode(barcode.slice(0, 7)), 0x0a);
+    } else {
+      output.push(0x1d, 0x6b, 0x49, 0x42, ...encoder.encode(barcode), 0x00);
+    }
+    output.push(0x0a, 0x0a);
     if (index === labels.length - 1) output.push(0x1d, 0x56, 0x00);
   });
   return new Uint8Array(output);
@@ -148,4 +255,20 @@ function buildBarcodeLabels(items, labelType = 'price', sizeKey = DEFAULT_LABEL_
   return { labels, size, tspl: buildTspl(labels, size), escPos: buildEscPos(labels) };
 }
 
-module.exports = { BRAND_NAME, DEFAULT_LABEL_SIZE, LABEL_SIZES, buildBarcodeLabels, getEan13Modules, isValidEan13 };
+module.exports = {
+  BRAND_NAME,
+  DEFAULT_LABEL_SIZE,
+  LABEL_SIZES,
+  buildBarcodeLabels,
+  barcodeSourceForEntry,
+  getCode128Modules,
+  getBarcodeModules,
+  getEan8Modules,
+  getEan13Modules,
+  findInternalBarcodeConflict,
+  isValidEan8,
+  isValidEan13,
+  isValidRetailBarcode,
+  isValidUpcA,
+  retailBarcodeWarning,
+};

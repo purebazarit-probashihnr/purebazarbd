@@ -13,15 +13,25 @@ export const getStockTransfers = (token, selectedOutletId) => api.get('/stock-tr
   params: selectedOutletId && selectedOutletId !== 'all' ? { selectedOutletId } : undefined,
 });
 export const createStockTransfer = (token, payload) => api.post('/stock-transfers', payload, authConfig(token));
+export const getPrintableStockTransferChallan = (token, id) => api.get(
+  `/stock-transfers/${id}/challan`,
+  authConfig(token),
+);
+export const printStockTransferChallan = (token, id) => api.post(
+  `/stock-transfers/${id}/challan/print`,
+  {},
+  authConfig(token),
+);
 export const dispatchStockTransfer = (token, id, payload) => api.post(`/stock-transfers/${id}/dispatch`, payload, authConfig(token));
 export const receiveStockTransfer = (token, id, payload) => api.post(`/stock-transfers/${id}/receive`, payload, authConfig(token));
 export const getWarehouseStock = (token, warehouseId) => api.get('/stock', {
   ...authConfig(token),
   params: { warehouseId },
 });
-export const getOutletProducts = (token, warehouseId) => api.get('/inventory/outlet-products', {
+export const getCentralWarehouseStock = (token) => api.get('/stock/central-warehouse', authConfig(token));
+export const getOutletProducts = (token, warehouseId, allLocations = false) => api.get('/inventory/outlet-products', {
   ...authConfig(token),
-  params: { warehouseId },
+  params: allLocations ? { allLocations: true } : { warehouseId },
 });
 export const getStockAdjustments = (token, params) => api.get('/stock-adjustments', {
   ...authConfig(token),
@@ -50,5 +60,6 @@ export const getGoodsReceives = (token, selectedOutletId) => api.get('/goods-rec
   params: selectedOutletId && selectedOutletId !== 'all' ? { selectedOutletId } : undefined,
 });
 export const createGoodsReceive = (token, payload) => api.post('/goods-receives', payload, authConfig(token));
+export const createReceiveVendorCopy = (token, payload) => api.post('/goods-receives/vendor-copy', payload, authConfig(token));
 export const approveGoodsReceive = (token, id) => api.post(`/goods-receives/${id}/approve`, {}, authConfig(token));
 export const getPrintableGoodsReceive = (token, id) => api.get(`/goods-receives/${id}/print`, authConfig(token));

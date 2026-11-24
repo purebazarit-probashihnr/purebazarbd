@@ -69,6 +69,26 @@ describe('vendor overview API', () => {
     });
   });
 
+  it('returns a non-member vendor code without presenting it as a Probashi member ID', async () => {
+    models.Vendor.findById.mockReturnValue(query({
+      _id: vendorId,
+      name: 'Local Vendor',
+      memberId: 'VND-0001',
+      vendorCode: 'VND-0001',
+      membershipType: 'Non-member',
+      shopName: 'Local Shop',
+    }));
+
+    const response = await request(app).get(`/api/vendors/${vendorId}/overview`).set(auth);
+
+    expect(response.status).toBe(200);
+    expect(response.body.vendor).toEqual(expect.objectContaining({
+      memberId: null,
+      vendorCode: 'VND-0001',
+      membershipType: 'Non-member',
+    }));
+  });
+
   it('rejects an invalid date range', async () => {
     const response = await request(app)
       .get(`/api/vendors/${vendorId}/overview?startDate=2026-08-10&endDate=2026-08-01`).set(auth);

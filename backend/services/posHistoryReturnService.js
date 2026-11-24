@@ -45,6 +45,27 @@ function dateClause(query) {
   };
 }
 
+async function addHistoricalUnitNames(orders) {
+  orders.forEach((order) => {
+    delete order.walletVerification;
+    delete order.walletVerificationReason;
+    delete order.walletVerificationCheckedAt;
+  });
+  const missing = orders.flatMap((order) => order.lines).filter((line) => !line.packageUnitName);
+  if (!missing.length) return orders;
+  const products = await Product.find({ _id: { $in: missing.map((line) => line.productId) } })
+    .select('unitId').lean();
+  const labels = await unitLabelMap(products);
+  const names = new Map(products.map((product) => [
+    product._id.toString(), displayFields(product, labels).packageUnitName,
+  ]));
+  missing.forEach((line) => {
+    const name = names.get(String(line.productId));
+    if (name) line.packageUnitName = name;
+  });
+  return orders;
+}
+
 async function listSalesHistory(req) {
   const { query } = req;
   const filter = {};
@@ -80,16 +101,27 @@ async function listSalesHistory(req) {
     .sort({ createdAt: -1 })
     .limit(100)
     .lean();
-  const missing = orders.flatMap((order) => order.lines).filter((line) => !line.packageUnitName);
-  if (!missing.length) return orders;
-  const products = await Product.find({ _id: { $in: missing.map((line) => line.productId) } }).select('unitId').lean();
-  const labels = await unitLabelMap(products);
-  const names = new Map(products.map((product) => [product._id.toString(), displayFields(product, labels).packageUnitName]));
-  missing.forEach((line) => {
-    const name = names.get(String(line.productId));
-    if (name) line.packageUnitName = name;
-  });
-  return orders;
+  return addHistoricalUnitNames(orders);
+}
+
+async function auditReceiptReprint(req) {
+  const order = await Order.findOne({
+    _id: req.params.orderId,
+    outlet: req.locationId,
+  }).populate('cashier', 'name').lean();
+  if (!order) throw statusError('POS bill was not found', 404);
+
+  await addHistoricalUnitNames([order]);
+  await AuditLog.create([{
+    actorId: req.user._id,
+    action: 'REPRINT',
+    entity: 'Order',
+    entityId: order._id,
+    createdAt: new Date(),
+    metadata: { orderNumber: order.orderNumber },
+    ipAddress: req.ip,
+  }]);
+  return order;
 }
 
 async function returnBill(req) {
@@ -204,4 +236,4 @@ async function returnBill(req) {
   }
 }
 
-module.exports = { listSalesHistory, returnBill };
+module.exports = { auditReceiptReprint, listSalesHistory, returnBill };

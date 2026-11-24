@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { PauseCircle, X } from 'lucide-react';
+import { PauseCircle } from 'lucide-react';
+import Modal from '@/components/ui/modal';
 import Button from '@/components/ui/button';
 import { lineTotal } from '@/services/pos-cart-utils.cjs';
 import { T } from '@/i18n/language-provider';
@@ -52,35 +53,29 @@ export function HeldBillsButton({ count, onClick }) {
 export function HeldBillsModal({ held, onRestore, onDiscard, onClose }) {
   const [confirmId, setConfirmId] = useState(null);
   return (
-    <div role="dialog" aria-modal="true" aria-label="Held bills" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-5 shadow-xl">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Held Bills ({held.length})</h2>
-          <button type="button" aria-label="Close" onClick={onClose}><X size={18} /></button>
-        </div>
-        {held.length === 0 && <p className="py-6 text-center text-sm text-slate-500"><T>{"No held bills."}</T></p>}
-        <ul className="space-y-2">
-          {held.map((sale) => (
-            <li key={sale.id} className="rounded-lg border border-slate-200 p-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="font-medium text-slate-900">{sale.note || 'No reference'}</p>
-                  <p className="text-xs text-slate-500">{new Date(sale.heldAt).toLocaleString()} · {sale.items.length} items · {sale.itemCount} qty</p>
-                </div>
-                <p className="font-semibold">৳{Number(sale.total).toFixed(2)}</p>
-                <div className="flex gap-2">
-                  <Button type="button" size="sm" variant="secondary" onClick={() => onRestore(sale)}>Restore</Button>
-                  {confirmId === sale.id ? (
-                    <button type="button" onClick={() => { onDiscard(sale.id); setConfirmId(null); }} className="rounded bg-red-700 px-3 py-1 text-white">Confirm delete</button>
-                  ) : (
-                    <button type="button" onClick={() => setConfirmId(sale.id)} className="rounded border border-red-300 px-3 py-1 text-red-700">Discard</button>
-                  )}
-                </div>
+    <Modal open onClose={onClose} title={`Held Bills (${held.length})`} className="max-h-[85vh] max-w-2xl">
+      {held.length === 0 && <p className="py-6 text-center text-sm text-slate-500"><T>{"No held bills."}</T></p>}
+      <ul className="space-y-2">
+        {held.map((sale) => (
+          <li key={sale.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-medium text-slate-900">{sale.note || 'No reference'}</p>
+                <p className="text-xs text-slate-500">{new Date(sale.heldAt).toLocaleString()} · {sale.items.length} items · {sale.itemCount} qty</p>
               </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
+              <p className="font-semibold">৳{Number(sale.total).toFixed(2)}</p>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="secondary" onClick={() => onRestore(sale)}>Restore</Button>
+                {confirmId === sale.id ? (
+                  <button type="button" onClick={() => { onDiscard(sale.id); setConfirmId(null); }} className="rounded bg-red-700 px-3 py-1 text-white">Confirm delete</button>
+                ) : (
+                  <button type="button" onClick={() => setConfirmId(sale.id)} className="rounded border border-red-300 px-3 py-1 text-red-700">Discard</button>
+                )}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Modal>
   );
 }

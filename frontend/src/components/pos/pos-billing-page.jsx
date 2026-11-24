@@ -3,277 +3,130 @@
 import {
   useCallback, useEffect, useRef, useState,
 } from 'react';
+import { useDispatch } from 'react-redux';
+import { useRouter } from 'next/navigation';
 import useAuth from '@/store/use-auth';
+import { expireOfflineSession, refreshSession } from '@/store/auth-slice';
+import usePosOutlet from '@/hooks/use-pos-outlet';
+import usePosOffline from '@/hooks/use-pos-offline';
+import usePosCart from '@/hooks/use-pos-cart';
+import usePosBilling from '@/hooks/use-pos-billing';
+import useToastMessages from '@/hooks/use-toast-messages';
 import CartPanel from './cart-panel';
 import BillSummary from './bill-summary';
 import ItemScanner from './item-scanner';
 import PaymentPanel from './payment-panel';
-import { checkoutPosBill, posErrorMessage, previewPosBill } from '@/services/pos';
+import PosOutletSelector from './outlet-selector';
+import OfflineSyncStatus from './offline-sync-status';
 import {
-  HeldBillsButton, HeldBillsModal, estimateTotal, useHeldSales,
+  HeldBillsButton, HeldBillsModal,
 } from './held-sales';
 import HoldSaleModal from './hold-sale-modal';
-import billingUtils from '@/services/pos-billing-utils.cjs';
-import {
-  STOCK_LIMIT_MESSAGE, availableStock, canSellPieces, clampQuantity, hasStockProblem,
-} from '@/services/pos-cart-utils.cjs';
-import { isGram, productLabel } from '@/services/stock-units.cjs';
 import InvoiceModal from './invoice-modal';
 import ErrorToast from './error-toast';
-import useToastMessages from '@/hooks/use-toast-messages';
-import usePosOutlet from '@/hooks/use-pos-outlet';
-import PosOutletSelector from './outlet-selector';
+import OfflineState from '@/components/common/offline-state';
 import { T } from '@/i18n/language-provider';
+import offlinePosAccess from '@/services/offline-pos-access.cjs';
+import posScreenState from '@/services/pos-screen-state.cjs';
 
-const { createPreviewPayload, paymentTotalMatches } = billingUtils;
+const { isOfflinePosUser } = offlinePosAccess;
+const { getPosScreenState } = posScreenState;
 
 export default function PosBillingPage() {
+  const dispatch = useDispatch();
+  const router = useRouter();
   const {
-    initialized, token, user, hasPermission,
+    initialized, token, user, hasPermission, offlineSessionValid,
   } = useAuth();
   const canRead = hasPermission('pos:read');
   const canWrite = hasPermission('pos:write');
   const canApprove = user?.role === 'Super Admin';
+  const offlinePosUser = isOfflinePosUser(user);
+  const [outletRefreshKey, setOutletRefreshKey] = useState(0);
   const {
     isSuperAdmin, outlets, selectedOutletId, setSelectedOutletId, loadingOutlets, outletError,
-  } = usePosOutlet();
-  const hasOutletSelection = !isSuperAdmin || Boolean(selectedOutletId);
-  const [items, setItems] = useState([]);
-  const [billDiscount, setBillDiscount] = useState(null);
-  const [methods, setMethods] = useState(['CASH']);
-  const [amounts, setAmounts] = useState({});
-  const [serverBill, setBill] = useState(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState('');
-  const [discountApproved, setDiscountApproved] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [checkoutError, setCheckoutError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  useToastMessages({ success: successMessage, error: checkoutError || previewError });
-  const [heldOpen, setHeldOpen] = useState(false);
-  const [holdOpen, setHoldOpen] = useState(false);
+  } = usePosOutlet({ refreshKey: outletRefreshKey });
+  const assignedOutletId = String(user?.locationId?._id || user?.locationId || '');
+  const outletId = offlinePosUser ? assignedOutletId : (selectedOutletId || assignedOutletId);
+  const {
+    online, browserOnline, apiReachable, catalog, queuedBills, syncResults, catalogError, syncing, queueOfflineBill,
+  } = usePosOffline(outletId, user?.id, offlinePosUser);
+  const screenState = getPosScreenState({
+    browserOnline,
+    apiReachable,
+    userLoaded: Boolean(user),
+    isOfflinePosUser: offlinePosUser,
+    hasPosPermission: canRead,
+    offlineSessionValid,
+  });
+  const handleReconnect = useCallback(async () => {
+    if (screenState === 'session-expired') {
+      dispatch(expireOfflineSession());
+      router.replace('/login');
+      return;
+    }
+    setOutletRefreshKey((current) => current + 1);
+    try {
+      await dispatch(refreshSession()).unwrap();
+    } catch (error) {
+      if (error === 0 || error >= 500) {
+        window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: false }));
+        return false;
+      }
+    }
+    return true;
+  }, [dispatch, router, screenState]);
   const [toast, setToast] = useState('');
-  const [receipt, setReceipt] = useState(null);
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
   const toastTimer = useRef(null);
   const showToast = useCallback((message) => {
     setToast(message);
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(''), 3500);
-  }, []);
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
-  const { held, hold, remove: discardHeld } = useHeldSales();
-  const latestPreview = useRef(0);
-  const selectedMethods = methods.includes('WALLET') ? ['WALLET'] : methods;
-  const singleMethod = selectedMethods.length === 1 ? selectedMethods[0] : null;
-  // The server preview already applies the 5% wallet discount.
-  const bill = serverBill;
+  }, [toastTimer]);
+  useEffect(() => () => clearTimeout(toastTimer.current), [toastTimer]);
 
-  let payload;
-  let formError = '';
-  try {
-    payload = createPreviewPayload(items, billDiscount, selectedMethods);
-  } catch (error) {
-    payload = null;
-    formError = error.message;
-  }
-
-  const previewKey = payload ? JSON.stringify(payload) : '';
-
+  const cart = usePosCart({
+    online, catalog, catalogError, showToast,
+  });
+  const hasOutletSelection = !isSuperAdmin || Boolean(selectedOutletId);
+  const billing = usePosBilling({
+    user,
+    canWrite,
+    canApprove,
+    offlineEnabled: offlinePosUser,
+    online,
+    catalog,
+    queueOfflineBill,
+    selectedOutletId,
+    hasOutletSelection,
+    items: cart.items,
+    setItems: cart.setItems,
+    billDiscount: cart.billDiscount,
+    setBillDiscount: cart.setBillDiscount,
+  });
+  useToastMessages({
+    success: screenState === 'ready' ? billing.successMessage : '',
+    error: screenState === 'ready' ? billing.checkoutError || billing.previewError : '',
+  });
   useEffect(() => {
-    const requestId = ++latestPreview.current;
-    let cancelled = false;
-    if (!items.length || !payload || !hasOutletSelection) {
-      setBill(null);
-      setPreviewError('');
-      setPreviewLoading(false);
-      return () => { cancelled = true; };
-    }
-    setBill(null);
-    setPreviewLoading(true);
-    setPreviewError('');
-    previewPosBill(payload, selectedOutletId).then(({ data }) => {
-      if (!cancelled && requestId === latestPreview.current) setBill(data.bill);
-    }).catch((error) => {
-      if (!cancelled && requestId === latestPreview.current) setPreviewError(posErrorMessage(error));
-    }).finally(() => {
-      if (!cancelled && requestId === latestPreview.current) setPreviewLoading(false);
-    });
-    return () => { cancelled = true; };
-  // previewKey captures all data that determines server pricing.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasOutletSelection, previewKey, selectedOutletId, items.length]);
-
-  useEffect(() => {
-    if (singleMethod && singleMethod !== 'WALLET' && bill) {
-      const total = bill.grandTotal.toFixed(2);
-      setAmounts((current) => (current[singleMethod] === total
-        ? current
-        : { ...current, [singleMethod]: total }));
-    }
-  }, [bill, singleMethod]);
-
-  const addItem = useCallback((product) => {
-    setSuccessMessage('');
-    const stock = Number(product.stock) || 0;
-    const existing = itemsRef.current.find((item) => item.productId === String(product.productId));
-    const limit = existing ? availableStock({ ...existing, stock }) : Math.floor(stock);
-    if (limit < 1 || (existing && Number(existing.quantity) >= limit)) {
-      showToast(STOCK_LIMIT_MESSAGE);
-      if (limit < 1 && !existing) return;
-    }
-    setItems((current) => {
-      const found = current.find((item) => item.productId === String(product.productId));
-      if (found) {
-        if (Number(found.quantity) >= availableStock({ ...found, stock })) return current;
-        return current.map((item) => item.productId === found.productId
-          ? { ...item, stock, quantity: Number(item.quantity) + 1 }
-          : item);
-      }
-      if (limit < 1) return current;
-      return [...current, {
-        productId: String(product.productId),
-        name: productLabel(product),
-        barcode: product.barcode,
-        mrp: Number(product.mrp),
-        unitValue: product.unitValue,
-        unitsPerPackage: product.unitsPerPackage,
-        packageUnitName: product.packageUnitName,
-        subUnitPrice: product.subUnitPrice,
-        unit: 'PACKAGE',
-        stock,
-        quantity: isGram(product.packageUnitName) ? Math.max(1, Math.min(1000, Math.floor(stock))) : 1,
-      }];
-    });
-  }, [showToast]);
-
-  function updateQuantity(productId, value) {
-    const target = items.find((item) => item.productId === productId);
-    if (!target) return;
-    const { quantity, limited } = clampQuantity(value, availableStock(target));
-    if (limited) showToast(STOCK_LIMIT_MESSAGE);
-    setItems((current) => current.map((item) => item.productId === productId ? { ...item, quantity: Math.max(quantity, 1) } : item));
-  }
-
-  function updateUnit(productId, unit) {
-    setItems((current) => current.map((item) => item.productId === productId && canSellPieces(item)
-      ? { ...item, unit, quantity: 1 }
-      : item));
-  }
-
-  function updateItemDiscount(productId, patch) {
-    setDiscountApproved(false);
-    setItems((current) => current.map((item) => item.productId === productId
-      ? { ...item, discount: { type: 'PERCENT', ...item.discount, ...patch } }
-      : item));
-  }
-
-  function updateBillDiscount(patch) {
-    setDiscountApproved(false);
-    setBillDiscount((current) => ({ type: 'PERCENT', ...current, ...patch }));
-  }
-
-  function changeMethods(next) {
-    setMethods(next);
-    setDiscountApproved(false);
-    setCheckoutError('');
-  }
-
-  function updateAmount(method, amount) {
-    setAmounts((current) => ({ ...current, [method]: amount }));
-  }
-
-  async function checkout() {
-    if (!bill || !payload || !canWrite || checkoutLoading) return;
-    setCheckoutLoading(true);
-    setCheckoutError('');
-    setSuccessMessage('');
-    try {
-      const payments = selectedMethods.map((method) => ({
-        method,
-        amount: method === 'WALLET' ? bill.grandTotal : Number(amounts[method]),
-      }));
-      const { data } = await checkoutPosBill({
-        ...payload,
-        payments,
-        ...(discountApproved ? { discountApproved: true } : {}),
-      }, selectedOutletId);
-      setSuccessMessage(`Sale completed${data.order?.orderNumber ? ` · ${data.order.orderNumber}` : ''}.`);
-      setItems([]);
-      setBillDiscount(null);
-      setMethods(['CASH']);
-      setAmounts({});
-      setDiscountApproved(false);
-      setBill(null);
-      if (data.receipt) setReceipt(data.receipt);
-    } catch (error) {
-      if (error.response?.status === 409 && error.response.data?.sufficient === false) {
-        setMethods(['CASH']);
-        setAmounts({ CASH: Number(error.response.data.bill?.grandTotal || 0).toFixed(2) });
-      }
-      setCheckoutError(posErrorMessage(error));
-    } finally {
-      setCheckoutLoading(false);
-    }
-  }
-
-  function resetCart() {
-    setItems([]);
-    setBillDiscount(null);
-    setMethods(['CASH']);
-    setAmounts({});
-    setDiscountApproved(false);
-    setBill(null);
-    setCheckoutError('');
-  }
-
-  function holdSale() {
-    if (!items.length) {
-      setCheckoutError('Cart is empty. Add items before holding a sale.');
-      return;
-    }
-    setHoldOpen(true);
-  }
-
-  function confirmHold(noteText) {
-    const note = noteText.trim();
-    setHoldOpen(false);
-    hold({
-      note,
-      items,
-      billDiscount,
-      methods,
-      amounts,
-      itemCount: items.reduce((s, i) => s + Number(i.quantity || 0), 0),
-      total: bill?.grandTotal ?? estimateTotal(items),
-    });
-    resetCart();
-    setSuccessMessage(`Sale held${note ? ` · ${note}` : ''}.`);
-  }
-
-  function restoreSale(sale) {
-    if (items.length) {
-      if (!window.confirm('The current cart has items. OK = replace it with the held bill; Cancel = keep current cart.')) return;
-    }
-    resetCart();
-    setItems(sale.items);
-    setBillDiscount(sale.billDiscount || null);
-    setMethods(sale.methods?.length ? sale.methods : ['CASH']);
-    setAmounts(sale.amounts || {});
-    discardHeld(sale.id);
-    setHeldOpen(false);
-    setSuccessMessage('Held bill restored.');
-  }
-
-  const paymentsMatch = bill && paymentTotalMatches(selectedMethods, amounts, bill.grandTotal);
-  const approvalReady = !bill?.discountApprovalRequired || (canApprove && discountApproved);
-  const canCheckout = canWrite && items.length > 0 && bill && !previewLoading && !previewError
-    && !formError && !checkoutLoading && selectedMethods.length > 0
-    && paymentsMatch && approvalReady && !hasStockProblem(items) && hasOutletSelection;
+    const warnBeforeLeaving = (event) => {
+      if (!cart.items.length && !queuedBills.length) return undefined;
+      event.preventDefault();
+      event.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [cart.items.length, queuedBills.length]);
 
   if (!initialized) return <p role="status" className="py-10 text-center"><T>{"Loading your POS session..."}</T></p>;
-  if (!token || !canRead) return <p role="alert" className="rounded bg-red-50 p-4 text-red-800"><T>{"You do not have permission to view the POS."}</T></p>;
+  if (screenState === 'offline-unavailable' || screenState === 'session-expired') {
+    return <OfflineState state={screenState} onReachable={handleReconnect} />;
+  }
+  if (screenState === 'no-permission') {
+    return <p role="alert" className="rounded bg-red-50 p-4 text-red-800"><T>{"You do not have permission to view the POS."}</T></p>;
+  }
+  if (!token) return <p role="status" className="py-10 text-center"><T>{"Loading your POS session..."}</T></p>;
   if (!canWrite) return <p role="alert" className="rounded bg-red-50 p-4 text-red-800"><T>{"You do not have permission to complete POS sales."}</T></p>;
 
   return (
@@ -285,10 +138,18 @@ export default function PosBillingPage() {
           <p className="mt-1 text-sm text-slate-600"><T>{"Scan items, apply permitted discounts, and complete a bill."}</T></p>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={holdSale} disabled={!items.length || checkoutLoading} className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"><T>{"Hold Sale"}</T></button>
-          <HeldBillsButton count={held.length} onClick={() => setHeldOpen(true)} />
+          <OfflineSyncStatus
+            online={online}
+            count={queuedBills.length}
+            syncing={syncing}
+            results={syncResults}
+            queuedBills={queuedBills}
+          />
+          <button type="button" onClick={billing.holdSale} disabled={!cart.items.length || billing.checkoutLoading} className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"><T>{"Hold Sale"}</T></button>
+          <HeldBillsButton count={billing.held.length} onClick={() => billing.setHeldOpen(true)} />
         </div>
       </header>
+      {catalogError && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{catalogError}</p>}
       <PosOutletSelector
         isSuperAdmin={isSuperAdmin}
         outlets={outlets}
@@ -297,55 +158,69 @@ export default function PosBillingPage() {
         error={outletError}
         onChange={(event) => {
           setSelectedOutletId(event.target.value);
-          resetCart();
+          billing.resetCart();
         }}
       />
       {isSuperAdmin && !selectedOutletId && !loadingOutlets && !outletError && (
         <p className="text-sm text-slate-600" role="status"><T>{"Select an outlet before using POS."}</T></p>
       )}
-      <ErrorToast message={toast || formError} onClose={toast ? () => setToast('') : undefined} />
-      {receipt && <InvoiceModal receipt={receipt} onClose={() => setReceipt(null)} />}
-      {holdOpen && <HoldSaleModal onConfirm={confirmHold} onCancel={() => setHoldOpen(false)} />}
-      {heldOpen && <HeldBillsModal held={held} onRestore={restoreSale} onDiscard={discardHeld} onClose={() => setHeldOpen(false)} />}
+      <ErrorToast message={toast || billing.formError} onClose={toast ? () => setToast('') : undefined} />
+      {billing.receipt && <InvoiceModal receipt={billing.receipt} onClose={() => billing.setReceipt(null)} />}
+      {billing.holdOpen && <HoldSaleModal onConfirm={billing.confirmHold} onCancel={() => billing.setHoldOpen(false)} />}
+      {billing.heldOpen && (
+        <HeldBillsModal
+          held={billing.held}
+          onRestore={billing.restoreSale}
+          onDiscard={billing.discardHeld}
+          onClose={() => billing.setHeldOpen(false)}
+        />
+      )}
       {hasOutletSelection && !loadingOutlets && !outletError && (
         <ItemScanner
           key={selectedOutletId}
-          onAdd={addItem}
-          selectedOutletId={selectedOutletId}
+          onAdd={cart.addItem}
+          selectedOutletId={outletId}
+          offline={!online}
+          catalog={catalog?.items || []}
         />
       )}
       {hasOutletSelection && !loadingOutlets && !outletError && (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="space-y-5">
             <CartPanel
-              items={items}
-              onQuantity={updateQuantity}
-              onUnit={updateUnit}
-              onRemove={(id) => setItems((current) => current.filter((item) => item.productId !== id))}
-              onDiscount={updateItemDiscount}
+              items={cart.items}
+              offline={!online}
+              onQuantity={cart.updateQuantity}
+              onUnit={cart.updateUnit}
+              onRemove={(id) => cart.setItems((current) => current.filter((item) => item.productId !== id))}
+              onDiscount={cart.updateItemDiscount}
+              onVendorChange={cart.changeVendor}
             />
             <PaymentPanel
-              methods={selectedMethods}
-              amounts={amounts}
-              total={bill?.grandTotal || 0}
-              onMethods={changeMethods}
-              onAmount={updateAmount}
+              methods={billing.selectedMethods}
+              amounts={billing.amounts}
+              total={billing.bill?.grandTotal || 0}
+              onMethods={billing.changeMethods}
+              onAmount={billing.updateAmount}
+              offlineWalletAllowed={billing.offlineWalletAllowed}
+              offline={!online}
             />
           </div>
           <BillSummary
-            bill={bill}
-            billDiscount={billDiscount}
-            onBillDiscount={updateBillDiscount}
-            approvalRequired={Boolean(bill?.discountApprovalRequired)}
+            bill={billing.bill}
+            billDiscount={cart.billDiscount}
+            onBillDiscount={cart.updateBillDiscount}
+            approvalRequired={Boolean(billing.bill?.discountApprovalRequired)}
             canApprove={canApprove}
-            discountApproved={discountApproved}
-            onApprove={setDiscountApproved}
-            previewLoading={previewLoading}
-            previewError={previewError}
-            onCheckout={checkout}
-            checkoutLoading={checkoutLoading}
-            checkoutError={checkoutError}
-            canCheckout={Boolean(canCheckout)}
+            offline={!online}
+            discountApproved={billing.discountApproved}
+            onApprove={billing.setDiscountApproved}
+            previewLoading={billing.previewLoading}
+            previewError={billing.previewError}
+            onCheckout={billing.checkout}
+            checkoutLoading={billing.checkoutLoading}
+            checkoutError={billing.checkoutError || billing.offlineWalletMessage}
+            canCheckout={billing.canCheckout}
           />
         </div>
       )}

@@ -13,6 +13,7 @@
     "restore": "node scripts/restoreDb.js",
     "migrate:role-permissions": "node scripts/migrateRolePermissions.js",
     "migrate:product-barcodes": "node scripts/migrateProductBarcodes.js",
+    "migrate:vendor-product-barcodes": "node scripts/migrateVendorProductBarcodes.js",
     "migrate:vendor-ledger-locations": "node scripts/migrateVendorLedgerLocations.js"
   },
   "dependencies": {

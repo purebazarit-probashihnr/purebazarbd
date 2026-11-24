@@ -1,26 +1,31 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { AuditLog, User } = require('../models');
+const { AuditLog, Settings, User } = require('../models');
 const { expandPermissions } = require('../config/permissionCatalog');
 const { isSuperAdmin, locationIdOf } = require('../utils/locationScope');
 
 const DUMMY_HASH = bcrypt.hashSync('purebazar-dummy-password', 10);
 
-function publicUser(user) {
+function publicUser(user, settings = {}) {
   const role = user.roleId && typeof user.roleId === 'object' ? user.roleId : null;
-  const admin = isSuperAdmin({ roleId: role });
-  const location = user.locationId?.name ? user.locationId : null;
+  const admin = user.role === 'Super Admin' || isSuperAdmin({ roleId: role });
+  const location = user.locationId?.name ? user.locationId : user.location || null;
+  const locationKey = location?._id?.toString() || location?.id || null;
   return {
     id: user._id.toString(),
     name: user.name,
     email: user.email,
-    role: role?.name || null,
+    role: role?.name || user.role || null,
     roleId: role?._id?.toString() || user.roleId?.toString() || null,
-    permissions: expandPermissions(Array.isArray(role?.permissions) ? role.permissions : []),
+    permissions: expandPermissions(Array.isArray(role?.permissions)
+      ? role.permissions
+      : Array.isArray(user.permissions) ? user.permissions : []),
     locationId: admin ? null : locationIdOf(user.locationId),
-    location: !admin && location ? { id: location._id.toString(), name: location.name, type: location.type } : null,
+    location: !admin && locationKey ? { id: locationKey, name: location.name, type: location.type } : null,
     isLocationLocked: !admin && Boolean(user.locationId),
-    canViewAllLocations: admin || Boolean(role?.canViewAllLocations),
+    canViewAllLocations: admin || Boolean(role?.canViewAllLocations || user.canViewAllLocations),
+    offlineSessionHours: settings.offlineSessionHours || 24,
+    lockCashierToPos: Boolean(settings.lockCashierToPos),
   };
 }
 
@@ -52,8 +57,10 @@ async function login(req, res, next) {
       throw error;
     }
 
+    const settings = await Settings.findOne({ singleton: 'global' }).lean() || {};
+    const offlineSessionHours = Math.max(1, Math.min(24, Number(settings.offlineSessionHours) || 24));
     const token = jwt.sign({ sub: user._id.toString() }, process.env.JWT_SECRET, {
-      expiresIn: '8h',
+      expiresIn: `${offlineSessionHours}h`,
       algorithm: 'HS256',
     });
     await AuditLog.create({
@@ -66,15 +73,20 @@ async function login(req, res, next) {
 
     res.set('Authorization', `Bearer ${token}`);
     res.set('Cache-Control', 'no-store');
-    return res.json({ success: true, user: publicUser(user), token });
+    return res.json({ success: true, user: publicUser(user, settings), token });
   } catch (error) {
     return next(error);
   }
 }
 
-function me(req, res) {
+async function me(req, res, next) {
   res.set('Cache-Control', 'no-store');
-  return res.json({ success: true, user: req.user });
+  try {
+    const settings = await Settings.findOne({ singleton: 'global' }).lean() || {};
+    return res.json({ success: true, user: publicUser(req.user, settings) });
+  } catch (error) {
+    return next(error);
+  }
 }
 
 async function logout(req, res, next) {

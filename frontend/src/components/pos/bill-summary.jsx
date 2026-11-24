@@ -11,7 +11,7 @@ const money = (value) => (Number(value) || 0).toFixed(2);
 export default function BillSummary({
   bill, billDiscount, onBillDiscount,
   approvalRequired, canApprove, discountApproved, onApprove, previewLoading, previewError,
-  onCheckout, checkoutLoading, checkoutError, canCheckout,
+  onCheckout, checkoutLoading, checkoutError, canCheckout, offline = false,
 }) {
   return (
     <aside className="space-y-4">
@@ -68,7 +68,9 @@ export default function BillSummary({
       {approvalRequired && (
         <section className="rounded-lg border border-amber-300 bg-amber-50 p-3">
           <p role="alert" className="text-sm text-amber-900">
-            This discount exceeds the role limit. A Super Admin must approve it before checkout.
+            {offline
+              ? 'This discount exceeds the cached role limit and will be flagged for review when synced.'
+              : 'This discount exceeds the role limit. A Super Admin must approve it before checkout.'}
           </p>
           {canApprove && (
             <label className="mt-2 flex items-start gap-2 text-sm text-amber-950">

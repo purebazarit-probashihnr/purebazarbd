@@ -112,7 +112,11 @@ describe('vendor settlement APIs', () => {
     models.User.findById.mockReturnValue({
       populate: jest.fn().mockImplementation(async () => user),
     });
-    models.Vendor.findById.mockReturnValue(query({ _id: vendorId }));
+    models.Vendor.findById.mockReturnValue(query({
+      _id: vendorId,
+      vendorCode: 'VND-0001',
+      membershipType: 'Non-member',
+    }));
     models.Product.find.mockReturnValue(query([{ _id: productId, vendorPrice: 50 }]));
     models.StockMovement.aggregate.mockResolvedValue([{
       _id: productId,
@@ -377,6 +381,8 @@ describe('vendor settlement APIs', () => {
     const historyQuery = models.VendorStatement.find.mock.results[
       models.VendorStatement.find.mock.results.length - 1
     ].value;
-    expect(historyQuery.populate).toHaveBeenCalledWith('vendorId', 'name shopName');
+    expect(historyQuery.populate).toHaveBeenCalledWith(
+      'vendorId', 'name shopName memberId vendorCode membershipType',
+    );
   });
 });

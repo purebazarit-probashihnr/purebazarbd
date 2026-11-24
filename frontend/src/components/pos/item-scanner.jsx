@@ -8,7 +8,9 @@ import useToastMessages from '@/hooks/use-toast-messages';
 import CameraBarcodeScanner from '@/components/common/camera-barcode-scanner';
 import { productLabel, stockText } from '@/services/stock-units.cjs';
 
-export default function ItemScanner({ onAdd, selectedOutletId }) {
+export default function ItemScanner({
+  onAdd, selectedOutletId, offline = false, catalog = [],
+}) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
@@ -17,6 +19,20 @@ export default function ItemScanner({ onAdd, selectedOutletId }) {
   useToastMessages({ error });
   const busy = useRef(false);
   const searchId = useRef(0);
+
+  function localMatches(value) {
+    const term = value.trim().toLocaleLowerCase();
+    const exact = catalog.filter((item) => [item.barcode, ...(item.barcodes || [])]
+      .some((barcode) => String(barcode || '').toLocaleLowerCase() === term));
+    const matches = exact.length ? exact : catalog.filter((item) => (
+      [item.name, item.barcode, item.sku, ...(item.barcodes || [])]
+        .some((field) => String(field || '').toLocaleLowerCase().includes(term))
+    ));
+    return matches.map((item) => ({
+      ...item,
+      vendorMatches: exact.length > 1 ? exact : item.vendorMatches,
+    }));
+  }
 
   function reset() {
     searchId.current += 1;
@@ -28,6 +44,17 @@ export default function ItemScanner({ onAdd, selectedOutletId }) {
 
   async function submitValue(value) {
     if (!value || busy.current) return;
+    if (offline) {
+      setError('');
+      const matches = localMatches(value);
+      if (!matches.length) {
+        setError('No matching product is available in the saved offline catalog.');
+        return;
+      }
+      onAdd(matches[0]);
+      reset();
+      return;
+    }
     busy.current = true;
     setLoading(true);
     setError('');
@@ -61,6 +88,11 @@ export default function ItemScanner({ onAdd, selectedOutletId }) {
       return undefined;
     }
     const id = ++searchId.current;
+    if (offline) {
+      setResults(localMatches(value));
+      setOpen(true);
+      return () => { searchId.current += 1; };
+    }
     const timer = setTimeout(async () => {
       try {
         const { data } = await searchPosItems(value, selectedOutletId);
@@ -73,7 +105,7 @@ export default function ItemScanner({ onAdd, selectedOutletId }) {
       }
     }, 250);
     return () => clearTimeout(timer);
-  }, [query, selectedOutletId]);
+  }, [catalog, offline, query, selectedOutletId]);
 
   function choose(item) {
     onAdd(item);
@@ -111,7 +143,7 @@ export default function ItemScanner({ onAdd, selectedOutletId }) {
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-slate-900">{productLabel(item)}</span>
-                  <span className="flex items-center gap-1 text-xs text-slate-500"><Barcode size={12} /> {item.barcode}</span>
+                  <span className="flex items-center gap-1 text-xs text-slate-500"><Barcode size={12} /> {item.barcode} {item.vendorName ? `· ${item.vendorName}` : ''}</span>
                 </span>
                 <span className="shrink-0 text-right text-xs">
                   <span className="block font-semibold text-slate-900">৳{Number(item.mrp).toFixed(2)}</span>
@@ -125,7 +157,9 @@ export default function ItemScanner({ onAdd, selectedOutletId }) {
         </ul>
       )}
       <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
-        <Search size={13} /> Each scan adds one; quantity is capped at available stock.
+        <Search size={13} /> {offline
+          ? 'Searching the saved outlet catalog. Offline sales can exceed cached stock.'
+          : 'Each scan adds one; quantity is capped at available stock.'}
       </p>
     </section>
   );

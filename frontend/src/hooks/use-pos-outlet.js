@@ -9,6 +9,7 @@ export default function usePosOutlet({
   allowLocationSelection = false,
   defaultAssignedOutlet = false,
   defaultFirstOutlet = false,
+  refreshKey = 0,
 } = {}) {
   const { token, user } = useAuth();
   const isSuperAdmin = user?.role === 'Super Admin' || user?.permissions?.includes('*');
@@ -50,13 +51,16 @@ export default function usePosOutlet({
         return defaultFirstOutlet ? activeOutlets[0]?.id || '' : '';
       });
     }).catch((error) => {
+      if (!error.response || error.response.status >= 500) {
+        window.dispatchEvent(new CustomEvent('purebazar:network-status', { detail: false }));
+      }
       if (active) setOutletError(error.response?.data?.message || 'Unable to load active outlets.');
     }).finally(() => {
       if (active) setLoadingOutlets(false);
     });
 
     return () => { active = false; };
-  }, [allowAllLocations, assignedLocationId, canSelectOutlet, defaultAssignedOutlet, defaultFirstOutlet, isSuperAdmin, token]);
+  }, [allowAllLocations, assignedLocationId, canSelectOutlet, defaultAssignedOutlet, defaultFirstOutlet, isSuperAdmin, refreshKey, token]);
 
   return {
     isSuperAdmin,

@@ -26,7 +26,7 @@ export default function StockAdjustmentProductPicker({
         {matches.length > 0 && <div className="absolute z-10 mt-1 max-h-52 w-full overflow-y-auto rounded border border-slate-200 bg-white shadow-lg">
           {matches.map((product) => <button key={product.id} type="button" className="block w-full border-b border-slate-100 px-3 py-2 text-left hover:bg-slate-50" onClick={() => onAddProduct(product)}>
             <span className="block text-sm font-medium">{product.name}</span>
-            <small className="text-slate-500">{product.barcode} · Current stock: {stockText(product.stockQuantity, product)}</small>
+            <small className="text-slate-500">{product.barcode} {product.vendorName ? `· ${product.vendorName}` : ''} · Current stock: {stockText(product.stockQuantity, product)}</small>
           </button>)}
         </div>}
         {search.trim() && !searching && !searchError && matches.length === 0 && <p className="mt-1 text-xs text-slate-500"><T>{"No products found for this search."}</T></p>}

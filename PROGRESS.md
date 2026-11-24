@@ -638,6 +638,11 @@
 	- Validation: frontend production build passes; no manual device testing done.
 - [x] UI: shorten header language buttons to EN and BN
 	- Files: frontend/src/i18n/translate.js (short codes), frontend/src/components/common/language-switcher.jsx (EN/BN badges with full-name aria-label/title), frontend/src/app/theme.css and globals.css (tighter switcher spacing, header title ellipsis/min-width).
+
+- [x] Feature: non-member vendor registration and required field asterisks
+	- Files: Vendor membership type and vendor-code counter model/service; optional Probashi ID validation and conditional verification; vendor directory, product selection, ledger, statements, payouts, reports, and vendor detail identity handling; shared Input/Select required markers; Form A/KYB required markers, notes, translations, and regression tests.
+	- Decisions: Keep the unique memberId index compatible with existing databases; non-members receive an atomic VND code stored as both the vendor identifier and persistent vendorCode, while memberId remains optional in the API and responses. Existing vendors without membershipType default to Probashi member. No migration was run.
+	- Validation: Full backend Jest suite passes (53 suites, 398 tests); frontend production build passes; vendor identity tests pass (3). Frontend suite is 48/49 due the existing untranslated goods-receive literals: “Create, review, approve, and print goods receipts for your location.”, “Receive location”, and “Company direct purchase (parcel)”.
 	- Decisions: full labels kept in LANGUAGES for accessibility; no automated tests run.
 - [x] UI: make EN and BN language toggle buttons more compact and slim
 	- Files: frontend/src/app/theme.css and globals.css (.language-switcher/.language-option).
@@ -725,3 +730,88 @@
 	- Files: AttendanceRecord model and location-scoped self/manager APIs; attendance screen and header clock control; late-grace setting and Attendance permission; reference-only monthly payroll summaries; Attendance Report page-level read/write permissions for the page and Excel/PDF exports; payroll summary permission checks; attendance, settings, payroll, report, and permission tests.
 	- Decisions: Self punch times come only from the server clock; late grace defaults to 10 minutes; absences are derived from ended roster shifts and never stored as attendance records. Payroll summaries are calculated from attendance data for reference only and do not alter monthly salary or deductions; they require payroll access plus Attendance read. Attendance Report uses its own page permission and retains accounting location scoping.
 	- Validation: backend Jest passes (48 suites, 357 tests); frontend production build passes. Frontend tests pass 29/30; the known untranslated-string check still fails on nine pre-existing strings outside this change. Route-security checker accepts the self-status endpoint as authenticated self-service and still reports the pre-existing notifications route response.
+
+- [x] T Transfer challan
+	- Files: Transfer carrier fields and challan print/audit endpoints; Code 128 barcode output; three-copy A4 challan; outlet challan scan lookup; `showPricesOnChallan` setting and focused tests.
+	- Decisions: Challan number uses the existing transfer number (uppercase final eight ID characters); prices are hidden by default; each print job generates Warehouse, Carrier, and Outlet copies; reprints increment the transfer print count and create a PRINT audit entry. Transfer and challan access remains location-scoped, with the documented all-location role exception for printing.
+	- Validation: backend Jest passes (48 suites, 361 tests); frontend production build passes. Frontend tests pass 29/30; the remaining failure is the existing Bengali translation assertion for nine unrelated strings.
+
+- [x] BC Barcodes and vendor copies
+	- Files: Vendor-scoped primary/extra barcodes and source, PB- internal barcode generation, FIFO POS vendor selection, vendor-copy flows for Products and GRN, vendor-aware stock/search displays, label filtering/output, dry-run migration, and focused tests.
+	- Decisions: Internal barcodes use the reserved `PB-` prefix; check-digit errors warn but do not block manufacturer codes; POS choice follows the oldest positive GRN/transfer-in lot. The migration defaults to dry run and has not been run against any database.
+	- Validation: Backend Jest passes (51 suites, 375 tests); frontend production build passes. Frontend tests pass 31/32; the remaining failure is the existing i18n assertion for nine untranslated strings. `git diff --check` passes.
+
+- [x] Searchable vendor input in Add vendor copy
+	- Files: Shared `vendor-autocomplete.jsx` used by Add New Product and the Add vendor copy modal; product-group vendor-copy exclusions and focused frontend utility tests.
+	- Decisions: Add vendor copy keeps editable prefills for vendor price and MRP, excludes the source/current vendor and vendors already represented in the same product group, and reports a clear duplicate-vendor message. No billEngine or database migration changes.
+	- Validation: Frontend production build passes. Focused vendor-copy tests pass; the full frontend suite passes 33/34, with the remaining i18n failure limited to eight unrelated existing untranslated literals. No database migration was run.
+
+- [x] O Offline POS
+	- Files: POS service worker and app shell; IndexedDB catalog/offline bill queue; shared-engine offline billing and receipts; offline-session and POS-lock settings; idempotent backend sync, catalog snapshots, and sale-time cashier shift totals; focused backend and frontend tests.
+	- Decisions: Offline bills use client UUIDs, per-outlet reserved number ranges, and FIFO sync; sync retries return the existing order, while sold bills that overdraw stock are saved with review flags and matching stock/vendor ledger entries. Offline wallet payment requires the General Settings flag; offline sessions cache no passwords and expire within the configured maximum of 24 hours. No database migration was run.
+	- Validation: Backend Jest passes (52 suites, 379 tests); frontend production build passes. Frontend tests pass 36/37; the remaining existing i18n assertion reports nine unrelated untranslated strings.
+
+- [x] O1 Offline wallet payment with deferred verification
+	- Files: Offline wallet settings and cached catalog controls; offline POS payment, receipt, and sync result; wallet verification fields and async verifier; audited Finance reconciliation list/retry; cashier shift pending count and amount; focused backend and frontend tests.
+	- Decisions: Offline wallet payments remain full-tender bills, use cached wallet discount rules and a configurable per-bill maximum, and require a typed member ID and Probashi reference. Sync saves the order without a Probashi request, then starts verification after the response; unavailable checks stay pending for manager retry. Verification never reverses sales and does not change revenue or bill pricing. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 385 tests); frontend production build passes; focused offline POS tests pass (5/5). Frontend tests pass 38/39; the remaining existing i18n assertion reports nine unrelated untranslated strings.
+
+- [x] O1a Optional member ID and reference for offline wallet
+	- Files: Default-off General Settings requirement; conditional POS inputs and checkout validation; optional blank wallet identifiers in offline sync; `unverifiable` post-sync state and Finance list totals; cashier shift regression coverage.
+	- Decisions: When identifier enforcement is off, empty values are omitted from synced orders and verification marks them `unverifiable` without calling Probashi. Enabled enforcement still requires both fields. The wallet amount limit and receipt pending line are unchanged. No database migration was run.
+	- Validation: Full backend Jest passes (53 suites, 390 tests); frontend production build passes; focused offline POS tests pass (6/6). Frontend-wide tests retain the existing i18n failure for nine untranslated strings.
+
+- [x] O1b Remove member ID and reference from offline wallet
+	- Files: Removed cashier identifier inputs and setting; omitted identifiers from new offline queue payloads and receipts; initialized synced wallet bills as `unverifiable`; added selected-date offline wallet amount totals and outlet detail to Finance.
+	- Decisions: Legacy queued identifier fields remain accepted for sync compatibility but are not stored or used. New offline wallet bills never trigger automatic Probashi verification. The existing offline-wallet permission and per-bill maximum remain unchanged. No database migration was run.
+	- Validation: Full backend Jest passes (53 suites, 390 tests); frontend production build passes; focused offline POS tests pass (6/6). Frontend-wide tests retain the existing i18n failure for nine untranslated strings.
+
+- [x] Receipt in Sales History and main logo
+	- Files: Added scoped and audited receipt reprints from bill rows and bill details; shared POS invoice layout and stored-order receipt builder; thermal monochrome static logo.
+	- Decisions: Receipts use saved order totals and payment/line snapshots, mark all history opens `COPY - Reprint`, and audit actor, timestamp, and order. The service worker precaches `/logo.png` for offline receipt printing. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 392 tests); receipt builder tests pass (4/4); frontend production build passes. Full frontend tests pass 43/44; the remaining existing i18n assertion reports nine unrelated untranslated strings.
+
+- [x] All inventory view and vendor columns
+	- Files: Location-specific all-inventory stock API and access tests; vendor name/brand stock fields; dedicated Central Warehouse stock API; Outlet Inventory and Central Warehouse table updates.
+	- Decisions: All-inventory rows remain separate per active location and product; only Super Admin and `canViewAllLocations` users can request all locations. Central Warehouse reads resolve an active `CENTRAL` location server-side. Stock calculations and movement records are unchanged; no database migration was run.
+	- Validation: Backend Jest passes (53 suites, 401 tests); frontend production build passes.
+
+- [x] Fix duplicate notifications
+	- Files: `backend/services/notificationService.js` and notification integration tests; `frontend/src/components/common/notification-bell.jsx`, `frontend/src/services/notification-state.cjs`, and its focused test.
+	- Decisions: Low-stock alerts are identified by product and location; notification groups de-duplicate by type-qualified ID. The bell normalizes each replacement response, keeps the newest copy and unread state, and counts each ID once. Notifications are pending actions; there is no read/mark-as-read model or endpoint. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 402 tests); frontend production build passes; focused notification test passes. Full frontend tests retain one existing i18n assertion failure for three untranslated goods-receive strings.
+
+- [x] Collision-safe internal product barcodes
+	- Files: `backend/models/ProductBarcodeCounter.js`, product barcode generation and collision helpers, product create/update and vendor-copy validation, barcode form source/warning/conflict handling, and focused backend/frontend tests.
+	- Decisions: New blank codes use an atomic 10-digit serial in the reserved `29` range with an EAN-13 check digit; lookup checks primary, extra, and indexed codes across all owners, treating UPC-A and leading-zero EAN-13 as equivalent. Typed/scanned codes remain manufacturer codes; legacy PB fallback and the per-vendor unique index remain unchanged. No migration was run.
+	- Validation: Backend Jest passes (53 suites, 412 tests); frontend build passes; focused barcode tests pass (9/9). Full frontend tests retain one existing i18n assertion failure for three untranslated goods-receive strings.
+
+- [x] Fix modal stacking for receipt
+	- Files: Shared modal portal/stack and lifecycle handling; invoice, hold-sale, and held-bills dialogs use the shared mechanism; modal stack order test.
+	- Decisions: Each modal has its own increasing layer and backdrop; only the top modal handles Escape/outside clicks. Body scroll is locked until the last modal closes, and focus is restored to the opener. Receipt printing remains scoped to the receipt with the existing 58 mm and 80 mm sizes. No database migration was run.
+	- Validation: Frontend production build passes; modal stack test passes. Full frontend test run passes 52/53; the existing i18n test fails for three untranslated goods-receiving strings.
+
+- [x] Fix receipt logo path
+	- Files: Shared public receipt-logo path module; receipt modal image loading; service worker logo precache; focused public-asset test.
+	- Decisions: Receipt preview and print use the existing `/logo.png` asset with no missing-path probes; the service worker caches the path module and logo for offline printing. Existing monochrome conversion, centering, and 58 mm/80 mm width limits remain unchanged. No database migration was run.
+	- Validation: Frontend production build passes; receipt-logo asset test passes. Full frontend tests pass 53/54; the existing i18n test fails for three untranslated goods-receive strings.
+
+- [x] Offline POS only for cashier and outlet manager
+	- Files: Shared `isOfflinePosUser` helper; POS/offline session/catalog/queue/held-bill guards; POS outlet and error handling; app-shell network badge and attendance widget; focused frontend tests and Bengali translations.
+	- Decisions: Offline POS is enabled only for a fixed-outlet Cashier, Outlet Cashier, or Outlet Manager who is not Super Admin and is not allowed to view all locations. Other users get no offline catalog, session, queue, or offline holding behavior and see one offline-POS access message. Fixed-outlet users use their login outlet without fetching the outlet list. API connection failures set the global badge Offline and attendance status fails silently.
+	- Validation: Backend Jest passes (53 suites, 412 tests); frontend production build passes; frontend tests pass 57/57. No database migration was run.
+
+- [x] Professional offline screen for POS
+	- Files: Shared POS screen-state decision and offline health monitor; reusable light/dark OfflineState card for POS and app-shell fallback; auth restore/session expiry handling; POS outlet retry; Bengali translations and focused frontend tests.
+	- Decisions: Permission denial is shown only after online user data loads; eligible users with a valid offline session retain selling access, while expired sessions require sign-in. Offline screens poll `/api/health`, respond to browser reconnects, and retry account/outlet loading without a full reload. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 412 tests); frontend production build passes; frontend tests pass 59/59.
+
+- [x] O1c Offline wallet bills without verification messages
+	- Files: Offline POS sync and receipt; plain finance list of offline wallet bills; regular wallet tender shift totals; reconciliation filtering; focused backend and frontend regression tests.
+	- Decisions: Offline wallet orders sync idempotently as normal Wallet bills and never invoke member verification or Probashi reports. Manager list shows bill, date/time, outlet, cashier, and amount with a selected-date total; old verification fields remain readable but are omitted from bill outputs. Offline wallet bills stay out of online reconciliation and expected cash. The offline payment setting and per-bill maximum remain. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 413 tests); frontend production build passes; frontend tests pass 60/60.
+
+- [x] Offline landing for cashier and outlet manager
+	- Files: Exact POS-permission/outlet eligibility helper; Cache Storage offline profile lifecycle; pure service-worker navigation decision and cached POS assets; offline app-shell routing, toast, disabled sidebar entries; focused eligibility/navigation tests.
+	- Decisions: Eligibility requires POS permission, exactly one OUTLET location, and neither Super Admin nor all-location access. The service worker redirects valid sessions to cached POS, shows sign-in required for expired or missing profiles, and keeps the existing offline card for ineligible users. The profile stores only user/outlet display details and session expiry; logout clears it. No database migration was run.
+	- Validation: Backend Jest passes (53 suites, 413 tests); frontend tests pass 67/67; frontend production build passes; all 20 static POS asset references exist in the build output.

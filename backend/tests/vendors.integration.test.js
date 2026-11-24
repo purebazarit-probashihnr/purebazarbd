@@ -8,6 +8,7 @@ jest.mock('../models', () => ({
   Settings: { findOne: jest.fn() },
   User: { findById: jest.fn() },
   Vendor: { create: jest.fn(), find: jest.fn(), findById: jest.fn() },
+  VendorCodeCounter: { findOneAndUpdate: jest.fn() },
   WalletAuditLog: { create: jest.fn() },
 }));
 
@@ -16,7 +17,7 @@ jest.mock('../services/probashiWalletService', () => ({
 }));
 
 const {
-  AuditLog, Settings, User, Vendor, WalletAuditLog,
+  AuditLog, Settings, User, Vendor, VendorCodeCounter, WalletAuditLog,
 } = require('../models');
 const probashiWalletService = require('../services/probashiWalletService');
 const vendorRoutes = require('../routes/vendorRoutes');
@@ -93,8 +94,12 @@ describe('vendor registration and directory endpoints', () => {
   };
 
   beforeEach(() => {
+    let counterSequence = 0;
     process.env.JWT_SECRET = secret;
     jest.clearAllMocks();
+    VendorCodeCounter.findOneAndUpdate.mockImplementation(async () => ({
+      sequence: ++counterSequence,
+    }));
     User.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(admin) });
     AuditLog.create.mockResolvedValue({});
     WalletAuditLog.create.mockResolvedValue({});
@@ -177,6 +182,44 @@ describe('vendor registration and directory endpoints', () => {
     }));
   });
 
+  it('registers a non-member without verification and assigns a unique vendor code', async () => {
+    const response = await request(app).post('/api/vendors').set(auth).send({ ...form, memberId: '' });
+
+    expect(response.status).toBe(201);
+    expect(response.body.vendor).toEqual(expect.objectContaining({
+      memberId: null,
+      vendorCode: 'VND-0001',
+      identifier: 'VND-0001',
+      membershipType: 'Non-member',
+    }));
+    expect(probashiWalletService.verifyMember).not.toHaveBeenCalled();
+    expect(WalletAuditLog.create).not.toHaveBeenCalled();
+    expect(VendorCodeCounter.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'vendor' },
+      { $inc: { sequence: 1 } },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+    expect(Vendor.create).toHaveBeenCalledWith([expect.objectContaining({
+      memberId: 'VND-0001',
+      vendorCode: 'VND-0001',
+      membershipType: 'Non-member',
+    })]);
+  });
+
+  it('allocates distinct vendor codes for parallel non-member registrations', async () => {
+    const [first, second] = await Promise.all([
+      request(app).post('/api/vendors').set(auth).send({ ...form, memberId: '' }),
+      request(app).post('/api/vendors').set(auth).send({ ...form, memberId: '  ' }),
+    ]);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect([first.body.vendor.vendorCode, second.body.vendor.vendorCode].sort()).toEqual([
+      'VND-0001', 'VND-0002',
+    ]);
+    expect(probashiWalletService.verifyMember).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['NID or Passport number', { nidOrPassportNumber: '' }],
     ['trade license number', { tradeLicenseNumber: '' }],
@@ -217,6 +260,7 @@ describe('vendor registration and directory endpoints', () => {
     expect(response.status).toBe(200);
     expect(response.body.vendors).toEqual([expect.objectContaining({
       memberId: form.memberId,
+      membershipType: 'Probashi member',
       shopName: form.shopName,
       status: 'Active',
     })]);
@@ -224,6 +268,49 @@ describe('vendor registration and directory endpoints', () => {
       status: 'Active',
       $or: expect.arrayContaining([{ shopName: /shop/i }]),
     }));
+  });
+
+  it('searches and returns non-member vendors by vendor code', async () => {
+    Vendor.find.mockReturnValue(listQuery([vendorDocument({
+      name: 'Local Vendor',
+      vendorCode: 'VND-0001',
+      membershipType: 'Non-member',
+      shopName: 'Local Shop',
+    })]));
+
+    const response = await request(app).get('/api/vendors?q=VND-0001').set(auth);
+
+    expect(response.status).toBe(200);
+    expect(response.body.vendors[0]).toEqual(expect.objectContaining({
+      vendorCode: 'VND-0001',
+      identifier: 'VND-0001',
+      membershipType: 'Non-member',
+      shopName: 'Local Shop',
+    }));
+    expect(Vendor.find).toHaveBeenCalledWith(expect.objectContaining({
+      $or: expect.arrayContaining([{ vendorCode: /VND-0001/i }]),
+    }));
+  });
+
+  it.each([
+    ['name', 'Local Vendor'],
+    ['shopName', 'Local Shop'],
+  ])('searches a non-member vendor by %s', async (fieldName, search) => {
+    const responseVendor = vendorDocument({
+      name: 'Local Vendor',
+      vendorCode: 'VND-0001',
+      membershipType: 'Non-member',
+      shopName: 'Local Shop',
+    });
+    Vendor.find.mockReturnValue(listQuery([responseVendor]));
+
+    const response = await request(app).get(`/api/vendors?q=${encodeURIComponent(search)}`).set(auth);
+
+    expect(response.status).toBe(200);
+    expect(Vendor.find).toHaveBeenCalledWith(expect.objectContaining({
+      $or: expect.arrayContaining([{ [fieldName]: new RegExp(search, 'i') }]),
+    }));
+    expect(response.body.vendors[0].vendorCode).toBe('VND-0001');
   });
 
   it('audits vendor status changes', async () => {

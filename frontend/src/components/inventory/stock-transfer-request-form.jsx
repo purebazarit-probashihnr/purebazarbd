@@ -79,6 +79,7 @@ export default function StockTransferRequestForm({
         productId: product.id,
         productName: productLabel(product),
         barcode: product.barcode,
+        vendorName: product.vendorName,
         stockQuantity,
         isWeightBased: Boolean(product.isWeightBased),
         requestedQuantity: product.isWeightBased && stockQuantity < 1000 ? stockQuantity / 1000 : 1,
@@ -101,7 +102,7 @@ export default function StockTransferRequestForm({
       const response = await searchReceiveProducts(token, {
         warehouseId: sourceId, mode: 'REMOVE', q: barcode, limit: 10,
       });
-      const product = response.data.products.find((item) => item.barcode === barcode);
+      const product = response.data.products.find((item) => item.barcode === barcode || (item.barcodes || []).includes(barcode));
       if (!product) {
         setError(`No in-stock Central Warehouse product matches barcode ${barcode}.`);
         return;
@@ -175,7 +176,7 @@ export default function StockTransferRequestForm({
             {matches.length > 0 && <div className="absolute z-10 mt-1 max-h-52 w-full overflow-y-auto rounded border border-slate-200 bg-white shadow-lg">
               {matches.map((product) => <button key={product.id} type="button" className="block w-full border-b border-slate-100 px-3 py-2 text-left hover:bg-slate-50" onClick={() => addRequestProduct(product)}>
                 <span className="block text-sm font-medium">{productLabel(product)}</span>
-                <small className="text-slate-500">{product.barcode} · Central Warehouse stock: {stockLabel(product.stockQuantity, product.isWeightBased)}</small>
+                <small className="text-slate-500">{product.barcode} {product.vendorName ? `· ${product.vendorName}` : ''} · Central Warehouse stock: {stockLabel(product.stockQuantity, product.isWeightBased)}</small>
               </button>)}
             </div>}
             {search.trim() && !searching && !searchError && matches.length === 0 && <p className="mt-1 text-xs text-slate-500"><T>{"No in-stock Central Warehouse products found for this search."}</T></p>}
@@ -185,7 +186,7 @@ export default function StockTransferRequestForm({
           <div className="space-y-2">
             {requestLines.map((line) => (
               <div key={line.productId} className="grid items-end gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_9rem_auto]">
-                <div><strong className="block text-sm font-medium text-slate-800">{line.productName}</strong><small className="text-slate-500">{line.barcode} · Central Warehouse stock: {stockLabel(line.stockQuantity, line.isWeightBased)}</small></div>
+                <div><strong className="block text-sm font-medium text-slate-800">{line.productName}</strong><small className="text-slate-500">{line.barcode} {line.vendorName ? `· ${line.vendorName}` : ''} · Central Warehouse stock: {stockLabel(line.stockQuantity, line.isWeightBased)}</small></div>
                 <div>
                   <Input label={line.isWeightBased ? 'Requested quantity (Kg)' : 'Requested quantity'} type="number" min={line.isWeightBased ? '0.001' : '1'} max={line.isWeightBased ? line.stockQuantity / 1000 : line.stockQuantity} step={line.isWeightBased ? '0.001' : '1'} value={line.requestedQuantity} onChange={(event) => setRequestLines((current) => current.map((item) => item.productId === line.productId ? { ...item, requestedQuantity: event.target.value } : item))} />
                   {toBaseQuantity(line) > line.stockQuantity

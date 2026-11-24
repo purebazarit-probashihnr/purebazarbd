@@ -92,4 +92,27 @@ test('Form A requires its KYB fields and excludes non-essential personal fields'
   }
   assert.match(source, /nationality: 'Bangladeshi'/);
   assert.doesNotMatch(source, /Religion|Blood Group|Profession/);
+  const memberIdLine = source.split(/\r?\n/).find((line) => line.includes('name="memberId"'));
+  assert.ok(memberIdLine);
+  assert.doesNotMatch(memberIdLine, /\brequired\b/);
+});
+
+test('required shared labels add an untranslated red asterisk after translated text', () => {
+  for (const component of ['ui/input.jsx', 'ui/select.jsx']) {
+    const source = fs.readFileSync(path.join(srcDir, 'components', component), 'utf8');
+    assert.match(source, /\{t\(label\)\}\{required &&/);
+    assert.match(source, /text-red-600/);
+  }
+});
+
+test('Form A and KYB explain required markers and mark their validated custom fields', () => {
+  for (const component of ['vendor-register-form.jsx', 'vendor-kyb-form.jsx']) {
+    const source = fs.readFileSync(path.join(srcDir, 'components/vendors', component), 'utf8');
+    assert.match(source, /Fields marked \* are required/);
+  }
+  const formA = fs.readFileSync(path.join(srcDir, 'components/vendors/vendor-register-form.jsx'), 'utf8');
+  const kyb = fs.readFileSync(path.join(srcDir, 'components/vendors/vendor-kyb-form.jsx'), 'utf8');
+  assert.match(formA, /className="field-label"><T>\{"Present Address"\}<\/T><span className="text-red-600"/);
+  assert.match(kyb, /label="Trade license document"[^>]+required/);
+  assert.match(kyb, /label="Business type"[^>]+required/);
 });

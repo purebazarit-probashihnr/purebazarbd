@@ -32,3 +32,12 @@ export const searchVendors = (token, q) => api.get(resourceApi('vendors'), { ...
 export const getProducts = (token) => api.get(resourceApi('products'), authConfig(token));
 export const createProduct = (token, payload) => api.post(resourceApi('products'), payload, authConfig(token));
 export const updateProduct = (token, id, payload) => api.put(`${resourceApi('products')}/${id}`, payload, authConfig(token));
+export const getProductBarcodeMatches = (token, barcode) => api.get(
+  `${resourceApi('products')}/barcodes/${encodeURIComponent(barcode)}`,
+  authConfig(token),
+);
+export const addVendorProduct = (token, productId, payload) => api.post(
+  `${resourceApi('products')}/${productId}/add-vendor`,
+  payload,
+  authConfig(token),
+);

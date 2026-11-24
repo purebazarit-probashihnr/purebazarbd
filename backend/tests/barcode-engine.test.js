@@ -1,4 +1,6 @@
-const { buildBarcodeLabels, getEan13Modules } = require('../../frontend/src/services/barcodeEngine');
+const {
+  buildBarcodeLabels, getCode128Modules, getEan13Modules,
+} = require('../../frontend/src/services/barcodeEngine');
 
 describe('barcode label output', () => {
   const product = {
@@ -58,8 +60,21 @@ describe('barcode label output', () => {
     expect(buildBarcodeLabels([{ ...potato, unitName: 'Box', packageTag: '2' }], 'price').labels[0].name).toBe('Potato (2 Box)');
   });
 
-  it('rejects invalid EAN-13 values and out-of-range batch quantities', () => {
-    expect(() => buildBarcodeLabels([{ ...product, barcode: '123' }])).toThrow('valid EAN-13');
+  it('prints invalid check-digit manufacturer codes as Code 128 and rejects oversized batches', () => {
+    const invalidEan = buildBarcodeLabels([{ ...product, barcode: '4006381333932' }]);
+    expect(invalidEan.tspl).toContain('"128"');
+    expect(Buffer.from(invalidEan.escPos).toString('latin1')).toContain('4006381333932');
     expect(() => buildBarcodeLabels([{ ...product, copies: 501 }])).toThrow('from 1 to 500');
+  });
+
+  it('encodes transfer numbers as Code 128 with a valid start, checksum, and stop pattern', () => {
+    const modules = getCode128Modules('A1B2C3D4');
+
+    expect(modules).toHaveLength(123);
+    expect(modules.slice(0, 3)).toEqual([true, true, false]);
+    expect(modules.slice(-13)).toEqual([
+      true, true, false, false, false, true, true, true, false, true, false, true, true,
+    ]);
+    expect(() => getCode128Modules('')).toThrow('non-empty printable ASCII');
   });
 });

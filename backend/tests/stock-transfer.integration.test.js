@@ -7,13 +7,15 @@ jest.mock('../models', () => ({
   AuditLog: { create: jest.fn() },
   Location: { find: jest.fn(), findById: jest.fn() },
   Product: { find: jest.fn() },
+  Settings: { findOne: jest.fn() },
   StockMovement: { aggregate: jest.fn(), create: jest.fn() },
   StockTransfer: { create: jest.fn(), find: jest.fn(), findOne: jest.fn() },
+  Unit: { find: jest.fn() },
   User: { find: jest.fn(), findById: jest.fn() },
 }));
 
 const {
-  AuditLog, Location, Product, StockMovement, StockTransfer, User,
+  AuditLog, Location, Product, Settings, StockMovement, StockTransfer, Unit, User,
 } = require('../models');
 const stockRoutes = require('../routes/stockRoutes');
 const errorMiddleware = require('../middlewares/errorMiddleware');
@@ -26,15 +28,19 @@ const warehouseUserId = '65b000000000000000000004';
 const outletUserId = '65b000000000000000000005';
 const productId = '65b000000000000000000006';
 const transferId = '65b000000000000000000007';
+const unitId = '65b000000000000000000008';
 const locations = new Map([
-  [centralId, { _id: new mongoose.Types.ObjectId(centralId), type: 'CENTRAL' }],
-  [outletId, { _id: new mongoose.Types.ObjectId(outletId), type: 'OUTLET' }],
-  [otherOutletId, { _id: new mongoose.Types.ObjectId(otherOutletId), type: 'OUTLET' }],
+  [centralId, { _id: new mongoose.Types.ObjectId(centralId), name: 'Central Warehouse', type: 'CENTRAL' }],
+  [outletId, { _id: new mongoose.Types.ObjectId(outletId), name: 'Outlet One', type: 'OUTLET' }],
+  [otherOutletId, { _id: new mongoose.Types.ObjectId(otherOutletId), name: 'Outlet Two', type: 'OUTLET' }],
 ]);
 const product = {
   _id: new mongoose.Types.ObjectId(productId),
   name: 'Sample Product',
   barcode: '1234567890123',
+  unitId: new mongoose.Types.ObjectId(unitId),
+  unitsPerPackage: 12,
+  mrp: 120,
 };
 
 function createApp() {
@@ -110,6 +116,17 @@ describe('stock transfer API', () => {
     });
   }
 
+  async function dispatchTransfer(id, quantity = 10) {
+    return request(app).post(`/api/stock-transfers/${id}/dispatch`)
+      .set(auth(warehouseUserId)).send({
+        lines: [{ productId, dispatchedQuantity: quantity }],
+        carrierName: 'Sample Carrier',
+        carrierPhone: '01700000000',
+        vehicle: 'Van 12',
+        notes: 'Handle with care',
+      });
+  }
+
   beforeEach(() => {
     process.env.JWT_SECRET = secret;
     jest.clearAllMocks();
@@ -155,7 +172,14 @@ describe('stock transfer API', () => {
       })),
     }));
     Location.findById.mockImplementation((id) => query(locations.get(id.toString()) || null));
+    Location.find.mockReturnValue(query([...locations.values()]));
     Product.find.mockReturnValue(query([product]));
+    Settings.findOne.mockReturnValue(query({ showPricesOnChallan: false }));
+    Unit.find.mockReturnValue(query([{
+      _id: new mongoose.Types.ObjectId(unitId),
+      name: 'Box',
+      abbreviation: 'Box',
+    }]));
     AuditLog.create.mockImplementation(async (rows) => { auditLogs.push(...rows); return rows; });
     StockTransfer.create.mockImplementation(async ([data]) => {
       const transfer = transferDocument(data);
@@ -250,8 +274,7 @@ describe('stock transfer API', () => {
       roleId: { name: 'Warehouse Staff', permissions: ['stock:transfer:read', 'stock:transfer:write'] },
       locationId: new mongoose.Types.ObjectId(centralId),
     };
-    const dispatched = await request(app).post(`/api/stock-transfers/${id}/dispatch`)
-      .set(auth(warehouseUserId)).send({ lines: [{ productId, dispatchedQuantity: 10 }] });
+    const dispatched = await dispatchTransfer(id);
     expect(dispatched.status).toBe(200);
     expect(dispatched.body.stockTransfer.status).toBe('Dispatched');
     expect(movements.at(-1)).toMatchObject({ type: 'TRANSFER_OUT', quantity: -10 });
@@ -276,8 +299,7 @@ describe('stock transfer API', () => {
   it('records a receipt shortage and blocks access from an unrelated outlet', async () => {
     const requested = await createRequestedTransfer(8);
     const id = requested.body.stockTransfer.id;
-    const dispatched = await request(app).post(`/api/stock-transfers/${id}/dispatch`)
-      .set(auth(warehouseUserId)).send({ lines: [{ productId, dispatchedQuantity: 8 }] });
+    const dispatched = await dispatchTransfer(id, 8);
     expect(dispatched.status).toBe(200);
 
     currentUser = {
@@ -303,6 +325,97 @@ describe('stock transfer API', () => {
       .set(auth(outletUserId)).send({ lines: [{ productId, receivedQuantity: 6 }] });
     expect(visible.status).toBe(404);
     expect(wrongOutletReceipt.status).toBe(404);
+  });
+
+  it('prints dispatched quantities as Box and Pcs and audits challan reprints', async () => {
+    const requested = await createRequestedTransfer();
+    const id = requested.body.stockTransfer.id;
+    const dispatched = await dispatchTransfer(id, 2.5);
+    expect(dispatched.body.stockTransfer).toMatchObject({
+      carrierName: 'Sample Carrier',
+      carrierPhone: '01700000000',
+      vehicle: 'Van 12',
+      notes: 'Handle with care',
+    });
+
+    currentUser = {
+      _id: warehouseUserId,
+      isActive: true,
+      roleId: { name: 'Warehouse Staff', permissions: ['stock:transfer:read'] },
+      locationId: new mongoose.Types.ObjectId(centralId),
+    };
+    const printable = await request(app).get(`/api/stock-transfers/${id}/challan`)
+      .set(auth(warehouseUserId));
+    const firstPrint = await request(app).post(`/api/stock-transfers/${id}/challan/print`)
+      .set(auth(warehouseUserId));
+    const reprint = await request(app).post(`/api/stock-transfers/${id}/challan/print`)
+      .set(auth(warehouseUserId));
+
+    expect(printable.status).toBe(200);
+    expect(printable.body.challan).toMatchObject({
+      challanNumber: id.slice(-8).toUpperCase(),
+      fromLocationName: 'Central Warehouse',
+      toLocationName: 'Outlet One',
+      carrierName: 'Sample Carrier',
+      totalLines: 1,
+      totalPieces: 30,
+      showPricesOnChallan: false,
+      lines: [{
+        productName: 'Sample Product',
+        barcode: '1234567890123',
+        unit: 'Box',
+        quantity: 2.5,
+        boxQuantity: 2,
+        pieceQuantity: 6,
+      }],
+    });
+    expect(printable.body.challan.lines[0]).not.toHaveProperty('price');
+    expect(firstPrint.body.isReprint).toBe(false);
+    expect(reprint.body.isReprint).toBe(true);
+    expect(auditLogs.filter((event) => event.action === 'PRINT')).toHaveLength(2);
+    expect(auditLogs.filter((event) => event.action === 'PRINT')[1].metadata).toMatchObject({
+      challanNumber: id.slice(-8).toUpperCase(),
+      reprint: true,
+    });
+
+    currentUser = {
+      _id: outletUserId,
+      isActive: true,
+      roleId: {
+        name: 'Deputy',
+        permissions: ['stock:transfer:read'],
+        canViewAllLocations: true,
+      },
+      locationId: new mongoose.Types.ObjectId(otherOutletId),
+    };
+    const allLocationChallan = await request(app).get(`/api/stock-transfers/${id}/challan`)
+      .set(auth(outletUserId));
+    const allLocationPrint = await request(app).post(`/api/stock-transfers/${id}/challan/print`)
+      .set(auth(outletUserId));
+    expect(allLocationChallan.status).toBe(200);
+    expect(allLocationPrint.status).toBe(200);
+
+    currentUser.roleId.canViewAllLocations = false;
+    const unrelatedChallan = await request(app).get(`/api/stock-transfers/${id}/challan`)
+      .set(auth(outletUserId));
+    const unrelatedPrint = await request(app).post(`/api/stock-transfers/${id}/challan/print`)
+      .set(auth(outletUserId));
+    expect(unrelatedChallan.status).toBe(404);
+    expect(unrelatedPrint.status).toBe(404);
+  });
+
+  it('includes challan prices only when the setting is enabled', async () => {
+    const requested = await createRequestedTransfer();
+    const id = requested.body.stockTransfer.id;
+    await dispatchTransfer(id, 2);
+    Settings.findOne.mockReturnValue(query({ showPricesOnChallan: true }));
+
+    const response = await request(app).get(`/api/stock-transfers/${id}/challan`)
+      .set(auth(warehouseUserId));
+
+    expect(response.status).toBe(200);
+    expect(response.body.challan.showPricesOnChallan).toBe(true);
+    expect(response.body.challan.lines[0].price).toBe(120);
   });
 
   it('filters transfer reads by the selected location for all-location roles', async () => {
@@ -379,8 +492,8 @@ describe('stock transfer API', () => {
   it('lets an all-location reader with receive permission confirm any destination transfer', async () => {
     const requested = await createRequestedTransfer(10);
     const id = requested.body.stockTransfer.id;
-    await request(app).post(`/api/stock-transfers/${id}/dispatch`)
-      .set(auth(warehouseUserId)).send({ lines: [{ productId, dispatchedQuantity: 10 }] }).expect(200);
+    const dispatched = await dispatchTransfer(id);
+    expect(dispatched.status).toBe(200);
     currentUser = {
       _id: new mongoose.Types.ObjectId(outletUserId),
       name: 'Deputy Receiver',
@@ -435,8 +548,8 @@ describe('stock transfer API', () => {
         toWarehouseId: otherOutletId,
         lines: [{ productId, requestedQuantity: 1 }],
       });
-    await request(app).post(`/api/stock-transfers/${otherDestination.body.stockTransfer.id}/dispatch`)
-      .set(auth(warehouseUserId)).send({ lines: [{ productId, dispatchedQuantity: 1 }] }).expect(200);
+    const otherDispatched = await dispatchTransfer(otherDestination.body.stockTransfer.id, 1);
+    expect(otherDispatched.status).toBe(200);
     currentUser = {
       _id: outletUserId,
       isActive: true,
@@ -487,7 +600,11 @@ describe('stock transfer API', () => {
     expect(outletRequest.status).toBe(403);
 
     const wrongSide = await request(app).post(`/api/stock-transfers/${id}/dispatch`)
-      .set(auth(outletUserId)).send({ lines: [{ productId, dispatchedQuantity: 6 }] });
+      .set(auth(outletUserId)).send({
+        lines: [{ productId, dispatchedQuantity: 6 }],
+        carrierName: 'Sample Carrier',
+        carrierPhone: '01700000000',
+      });
     expect(wrongSide.status).toBe(403);
 
     currentUser = {
@@ -496,8 +613,15 @@ describe('stock transfer API', () => {
       roleId: { name: 'Warehouse Staff', permissions: ['stock:transfer:read', 'stock:transfer:write'] },
       locationId: new mongoose.Types.ObjectId(centralId),
     };
-    const excessive = await request(app).post(`/api/stock-transfers/${id}/dispatch`)
+    const missingCarrier = await request(app).post(`/api/stock-transfers/${id}/dispatch`)
       .set(auth(warehouseUserId)).send({ lines: [{ productId, dispatchedQuantity: 6 }] });
+    const excessive = await request(app).post(`/api/stock-transfers/${id}/dispatch`)
+      .set(auth(warehouseUserId)).send({
+        lines: [{ productId, dispatchedQuantity: 6 }],
+        carrierName: 'Sample Carrier',
+        carrierPhone: '01700000000',
+      });
+    expect(missingCarrier.status).toBe(400);
     expect(excessive.status).toBe(409);
     expect(movements).toHaveLength(2);
     expect(transfers.get(id).status).toBe('Requested');

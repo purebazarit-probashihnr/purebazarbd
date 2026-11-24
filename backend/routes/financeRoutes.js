@@ -59,6 +59,9 @@ router.patch('/expenses/:id', ...can('expenses:write'), expenseAttachmentUpload,
 router.get('/wallet-reconciliation', can('finance:read'), [
   dateQuery('date', true),
 ], validateRequest, walletReconciliationController.list);
+router.get('/wallet-reconciliation/offline', ...can('finance:read'), enforceLocationScope.forAccountingRead, [
+  dateQuery('date', true),
+], validateRequest, walletReconciliationController.listOfflineWalletBills);
 router.post('/wallet-reconciliation/run', can('finance:write'), [
   body('date').optional().custom(isDateOnly).withMessage('date must be a valid YYYY-MM-DD date'),
 ], validateRequest, walletReconciliationController.run);

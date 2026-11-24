@@ -5,10 +5,11 @@ const request = require('supertest');
 
 jest.mock('../models', () => ({
   AuditLog: { create: jest.fn().mockResolvedValue({}) },
+  Settings: { findOne: jest.fn() },
   User: { findById: jest.fn(), findOne: jest.fn() },
 }));
 
-const { AuditLog, User } = require('../models');
+const { AuditLog, Settings, User } = require('../models');
 const authRoutes = require('../routes/authRoutes');
 const errorMiddleware = require('../middlewares/errorMiddleware');
 
@@ -40,6 +41,7 @@ describe('auth endpoints', () => {
     User.findById.mockReset();
     User.findOne.mockReset();
     AuditLog.create.mockClear();
+    Settings.findOne.mockReturnValue({ lean: jest.fn().mockResolvedValue({ offlineSessionHours: 24 }) });
     User.findOne.mockReturnValue({
       select: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(user) }),
     });
@@ -57,7 +59,8 @@ describe('auth endpoints', () => {
       success: true,
       user: {
         id: userId, name: 'Admin User', email: 'admin@example.test',
-        role: 'Super Admin', canViewAllLocations: true,
+        role: 'Super Admin', canViewAllLocations: true, offlineSessionHours: 24,
+        lockCashierToPos: false,
       },
     });
     expect(response.body.user.passwordHash).toBeUndefined();

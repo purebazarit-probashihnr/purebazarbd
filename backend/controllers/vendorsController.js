@@ -2,6 +2,7 @@ const {
   AuditLog, Settings, Vendor, WalletAuditLog,
 } = require('../models');
 const probashiWalletService = require('../services/probashiWalletService');
+const { nextVendorCode } = require('../services/vendorCodeService');
 
 function statusError(message, status) {
   const error = new Error(message);
@@ -31,9 +32,16 @@ async function getTerms(req, res, next) {
 
 function vendorOutput(vendor) {
   const data = vendor.toObject ? vendor.toObject() : vendor;
+  const isNonMember = data.membershipType === 'Non-member';
+  const memberId = isNonMember ? null : data.memberId || null;
+  const vendorCode = data.vendorCode || (isNonMember ? data.memberId : null);
+  const membershipType = data.membershipType || (memberId ? 'Probashi member' : 'Non-member');
   return {
     id: data._id.toString(),
-    memberId: data.memberId,
+    memberId,
+    vendorCode,
+    identifier: memberId || vendorCode,
+    membershipType,
     name: data.name,
     mobile: data.mobile,
     shopName: data.shopName,
@@ -55,7 +63,7 @@ async function list(req, res, next) {
     if (req.query.status) filter.status = req.query.status;
     if (req.query.q) {
       const escaped = req.query.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      filter.$or = ['memberId', 'name', 'mobile', 'shopName', 'productCategory']
+      filter.$or = ['memberId', 'vendorCode', 'name', 'mobile', 'shopName', 'productCategory']
         .map((field) => ({ [field]: new RegExp(escaped, 'i') }));
     }
     const vendors = await Vendor.find(filter).sort({ name: 1 }).lean();
@@ -66,54 +74,68 @@ async function list(req, res, next) {
 }
 
 async function create(req, res, next) {
-  const memberId = req.body.memberId.trim();
-  let verified = false;
+  const suppliedMemberId = String(req.body.memberId || '').trim();
   let member;
   try {
-    try {
-      member = await probashiWalletService.verifyMember({ memberId });
-      verified = true;
-    } finally {
-      await WalletAuditLog.create({
-        memberId,
-        action: 'MEMBER_VERIFY',
-        succeeded: verified,
-        createdBy: req.user._id,
-      });
-    }
-    if (!member.valid || !member.active || !member.walletEnabled) {
-      throw statusError('Member must be valid, active, and wallet-enabled', 403);
+    if (suppliedMemberId) {
+      let verified = false;
+      try {
+        member = await probashiWalletService.verifyMember({ memberId: suppliedMemberId });
+        verified = true;
+      } finally {
+        await WalletAuditLog.create({
+          memberId: suppliedMemberId,
+          action: 'MEMBER_VERIFY',
+          succeeded: verified,
+          createdBy: req.user._id,
+        });
+      }
+      if (!member.valid || !member.active || !member.walletEnabled) {
+        throw statusError('Member must be valid, active, and wallet-enabled', 403);
+      }
     }
 
+    const memberId = suppliedMemberId ? member.memberId : undefined;
+
     let vendor;
-    try {
-      [vendor] = await Vendor.create([{
-        memberId: member.memberId,
-        name: req.body.name,
-        applicantNameBn: req.body.applicantNameBn,
-        fatherName: req.body.fatherName,
-        motherName: req.body.motherName,
-        dateOfBirth: req.body.dateOfBirth,
-        nationality: req.body.nationality,
-        nidOrPassportNumber: req.body.nidOrPassportNumber,
-        presentAddress: req.body.presentAddress,
-        permanentAddress: req.body.permanentAddress,
-        mobile: req.body.mobile,
-        emergencyContact: req.body.emergencyContact,
-        email: req.body.email,
-        shopName: req.body.shopName,
-        tradeLicenseNumber: req.body.tradeLicenseNumber,
-        address: req.body.address,
-        productCategory: req.body.productCategory,
-        payoutMethod: req.body.payoutMethod,
-        accountDetails: req.body.accountDetails,
-        termsAccepted: req.body.termsAccepted,
-        termsVersion: req.body.termsVersion,
-        status: 'Active',
-      }]);
-    } catch (error) {
-      if (error.code === 11000) throw statusError('A vendor is already registered for this member', 409);
-      throw error;
+    for (let attempt = 0; ; attempt += 1) {
+      const vendorCode = suppliedMemberId ? undefined : await nextVendorCode();
+      try {
+        [vendor] = await Vendor.create([{
+          memberId: memberId || vendorCode,
+          ...(vendorCode ? { vendorCode } : {}),
+          membershipType: memberId ? 'Probashi member' : 'Non-member',
+          name: req.body.name,
+          applicantNameBn: req.body.applicantNameBn,
+          fatherName: req.body.fatherName,
+          motherName: req.body.motherName,
+          dateOfBirth: req.body.dateOfBirth,
+          nationality: req.body.nationality,
+          nidOrPassportNumber: req.body.nidOrPassportNumber,
+          presentAddress: req.body.presentAddress,
+          permanentAddress: req.body.permanentAddress,
+          mobile: req.body.mobile,
+          emergencyContact: req.body.emergencyContact,
+          email: req.body.email,
+          shopName: req.body.shopName,
+          tradeLicenseNumber: req.body.tradeLicenseNumber,
+          address: req.body.address,
+          productCategory: req.body.productCategory,
+          payoutMethod: req.body.payoutMethod,
+          accountDetails: req.body.accountDetails,
+          termsAccepted: req.body.termsAccepted,
+          termsVersion: req.body.termsVersion,
+          status: 'Active',
+        }]);
+        break;
+      } catch (error) {
+        if (error.code !== 11000) throw error;
+        if (!memberId && attempt < 4) continue;
+        throw statusError(
+          memberId ? 'A vendor is already registered for this member' : 'Unable to allocate a unique vendor code',
+          409,
+        );
+      }
     }
     await AuditLog.create({
       actorId: req.user._id,

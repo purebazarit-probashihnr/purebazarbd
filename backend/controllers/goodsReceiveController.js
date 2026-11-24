@@ -3,6 +3,7 @@ const {
   AuditLog, GoodsReceive, Location, Product, StockMovement, Vendor,
 } = require('../models');
 const { unitLabelMap, displayFields } = require('../utils/productDisplay');
+const { createVendorCopy } = require('../services/vendorProductCopy');
 
 function statusError(message, status) {
   const error = new Error(message);
@@ -107,7 +108,11 @@ async function searchProducts(req, res, next) {
     if (ownerType === 'VENDOR') filter.vendorId = vendorId;
     if (q) {
       const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      filter.$or = [{ name: new RegExp(escaped, 'i') }, { barcode: new RegExp(escaped, 'i') }];
+      filter.$or = [
+        { name: new RegExp(escaped, 'i') },
+        { barcode: new RegExp(escaped, 'i') },
+        { barcodes: new RegExp(escaped, 'i') },
+      ];
     }
     let stockByProduct = new Map();
     if (warehouseId) {
@@ -120,11 +125,40 @@ async function searchProducts(req, res, next) {
         filter._id = { $in: grouped.filter(({ quantity }) => quantity > 0).map(({ _id }) => _id) };
       }
     }
-    let productQuery = Product.find(filter).select('_id name unitId unitsPerPackage barcode ownerType vendorId')
+    let productQuery = Product.find(filter).select('_id name unitId unitsPerPackage barcode barcodes barcodeSource ownerType vendorId vendorPrice mrp productGroupId')
       .sort({ name: 1 });
     if (warehouseId) productQuery = productQuery.limit(Math.min(Number(req.query.limit) || 10, 10));
     const products = await productQuery.lean();
     const labels = await unitLabelMap(products);
+    const vendorIds = [...new Set(products.map((product) => product.vendorId?.toString()).filter(Boolean))];
+    const vendorRows = vendorIds.length
+      ? await Vendor.find({ _id: { $in: vendorIds } }).select('_id name shopName').lean()
+      : [];
+    const vendors = new Map(vendorRows.map((vendor) => [vendor._id.toString(), vendor.shopName || vendor.name]));
+    let otherVendorMatches = [];
+    if (ownerType === 'VENDOR' && q && products.length === 0) {
+      const exact = await Product.find({
+        ownerType: 'VENDOR',
+        vendorId: { $ne: vendorId },
+        $or: [{ barcode: q.trim() }, { barcodes: q.trim() }],
+      }).select('_id name unitId unitsPerPackage barcode barcodes barcodeSource ownerType vendorId vendorPrice mrp productGroupId')
+        .sort({ name: 1 }).limit(10).lean();
+      const otherVendorIds = [...new Set(exact.map((product) => product.vendorId?.toString()).filter(Boolean))];
+      const otherVendors = otherVendorIds.length
+        ? await Vendor.find({ _id: { $in: otherVendorIds } }).select('_id name shopName').lean()
+        : [];
+      const otherVendorNames = new Map(otherVendors.map((vendor) => [vendor._id.toString(), vendor.shopName || vendor.name]));
+      otherVendorMatches = exact.map((product) => ({
+        id: product._id.toString(),
+        name: product.name,
+        barcode: product.barcode,
+        barcodes: product.barcodes || [],
+        vendorId: product.vendorId?.toString() || null,
+        vendorName: otherVendorNames.get(product.vendorId?.toString()) || 'Other vendor',
+        vendorPrice: product.vendorPrice,
+        mrp: product.mrp,
+      }));
+    }
     return res.json({
       success: true,
       products: products.map((product) => ({
@@ -134,10 +168,45 @@ async function searchProducts(req, res, next) {
         unitsPerPackage: product.unitsPerPackage || 1,
         isWeightBased: /^(gram|grams|g)$/i.test(String(labels.names.get(product.unitId?.toString()) || '').trim()),
         barcode: product.barcode,
+        barcodes: product.barcodes || [],
         ownerType: product.ownerType,
         vendorId: product.vendorId?.toString() || null,
+        vendorName: vendors.get(product.vendorId?.toString()) || null,
+        productGroupId: product.productGroupId?.toString() || null,
         ...(warehouseId ? { stockQuantity: stockByProduct.get(product._id.toString()) || 0 } : {}),
       })),
+      otherVendorMatches,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function createReceiveVendorCopy(req, res, next) {
+  try {
+    const { copy, vendor } = await createVendorCopy({
+      sourceProductId: req.body.sourceProductId,
+      vendorId: req.body.vendorId,
+      vendorPrice: req.body.vendorPrice,
+      mrp: req.body.mrp,
+      actorId: req.user._id,
+      ipAddress: req.ip,
+    });
+    const labels = await unitLabelMap([copy]);
+    return res.status(201).json({
+      success: true,
+      product: {
+        id: copy._id.toString(),
+        name: copy.name,
+        ...displayFields(copy, labels),
+        barcode: copy.barcode,
+        barcodes: copy.barcodes || [],
+        ownerType: copy.ownerType,
+        vendorId: vendor._id.toString(),
+        vendorName: vendor.shopName || vendor.name,
+        unitsPerPackage: copy.unitsPerPackage || 1,
+        isWeightBased: /^(gram|grams|g)$/i.test(String(labels.names.get(copy.unitId?.toString()) || '').trim()),
+      },
     });
   } catch (error) {
     return next(error);
@@ -146,9 +215,9 @@ async function searchProducts(req, res, next) {
 
 async function nextChallanNumber(req, res, next) {
   try {
-    const vendor = await Vendor.findById(req.params.id).select('_id memberId').lean();
+    const vendor = await Vendor.findById(req.params.id).select('_id memberId vendorCode').lean();
     if (!vendor) throw statusError('Vendor not found', 404);
-    const code = String(vendor.memberId || vendor._id.toString().slice(-6)).toUpperCase();
+    const code = String(vendor.memberId || vendor.vendorCode || vendor._id.toString().slice(-6)).toUpperCase();
     let sequence = await GoodsReceive.countDocuments({ vendorId: vendor._id }) + 1;
     let challan = `CHN-${code}-${String(sequence).padStart(4, '0')}`;
     while (await GoodsReceive.exists({ vendorId: vendor._id, vendorChallanNumber: challan })) {
@@ -164,7 +233,7 @@ async function nextChallanNumber(req, res, next) {
 async function listVendors(req, res, next) {
   try {
     const vendors = await Vendor.find({ status: 'Active' })
-      .select('_id name shopName memberId mobile status')
+      .select('_id name shopName memberId vendorCode membershipType mobile status')
       .sort({ name: 1 })
       .lean();
     return res.json({
@@ -173,7 +242,10 @@ async function listVendors(req, res, next) {
         id: vendor._id.toString(),
         name: vendor.name,
         shopName: vendor.shopName,
-        memberId: vendor.memberId,
+        memberId: (vendor.membershipType || 'Probashi member') === 'Non-member' ? null : vendor.memberId,
+        vendorCode: vendor.vendorCode
+          || ((vendor.membershipType || 'Probashi member') === 'Non-member' ? vendor.memberId : null),
+        membershipType: vendor.membershipType || 'Probashi member',
         mobile: vendor.mobile,
         status: vendor.status,
       })),
@@ -262,7 +334,7 @@ async function getGoodsReceive(req, res, next) {
     const [products, vendor, location] = await Promise.all([
       Product.find({ _id: { $in: ids } }).select('_id name barcode unitId').lean(),
       receive.vendorId
-        ? Vendor.findById(receive.vendorId).select('_id name shopName memberId').lean()
+        ? Vendor.findById(receive.vendorId).select('_id name shopName memberId vendorCode membershipType').lean()
         : null,
       Location.findById(receive.warehouseId).select('name').lean(),
     ]);
@@ -273,7 +345,13 @@ async function getGoodsReceive(req, res, next) {
         ...receiveOutput(receive, products, labels),
         locationName: location?.name || null,
         vendor: vendor ? {
-          id: vendor._id.toString(), name: vendor.name, shopName: vendor.shopName, memberId: vendor.memberId,
+          id: vendor._id.toString(),
+          name: vendor.name,
+          shopName: vendor.shopName,
+          memberId: (vendor.membershipType || 'Probashi member') === 'Non-member' ? null : vendor.memberId,
+          vendorCode: vendor.vendorCode
+            || ((vendor.membershipType || 'Probashi member') === 'Non-member' ? vendor.memberId : null),
+          membershipType: vendor.membershipType || 'Probashi member',
         } : null,
       },
     });
@@ -353,4 +431,5 @@ async function rejectGoodsReceive(req, res, next) {
 module.exports = {
   searchProducts, nextChallanNumber, listVendors, listGoodsReceives, createGoodsReceive, updateGoodsReceive,
   getGoodsReceive, approveGoodsReceive, rejectGoodsReceive,
+  createReceiveVendorCopy,
 };

@@ -15,10 +15,10 @@ import useToastMessages from '@/hooks/use-toast-messages';
 const steps = ['Business Legal Information & Owner NID', 'Warehouse Logistics & Dispatch Contact'];
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
 
-function FileField({ label, name, file, error, onChange }) {
+function FileField({ label, name, file, error, onChange, required }) {
   return (
     <label className="ui-field" htmlFor={name}>
-      <span className="field-label"><T>{label}</T></span>
+      <span className="field-label"><T>{label}</T>{required && <span className="text-red-600" aria-hidden="true"> *</span>}</span>
       <input
         id={name}
         name={name}
@@ -26,6 +26,7 @@ function FileField({ label, name, file, error, onChange }) {
         accept="application/pdf,image/png,image/jpeg"
         className={`ui-input${error ? ' field-invalid' : ''}`}
         aria-invalid={Boolean(error)}
+        required={required}
         onChange={(event) => onChange(name, event.target.files?.[0] || null)}
       />
       {file && <span className="text-xs text-slate-500">{file.name}</span>}
@@ -117,31 +118,33 @@ export default function VendorKybForm() {
       </ol>
 
       <form onSubmit={submit} noValidate className="space-y-5">
+        <p className="text-sm text-slate-600"><T>{"Fields marked * are required"}</T></p>
+
         {step === 0 && (
           <>
             <Card title="Business legal information">
               <div className="grid gap-4 sm:grid-cols-2">
-                {field('companyName', 'Company name *')}
-                {field('tradeLicenseNo', 'Trade license no. *')}
-                {field('tradeLicenseExpiry', 'Trade license expiry *', { type: 'date' })}
-                <Select label="Business type *" name="businessType" value={form.businessType} error={errors.businessType} onChange={(e) => setField('businessType', e.target.value)}>
+                {field('companyName', 'Company name', { required: true })}
+                {field('tradeLicenseNo', 'Trade license no.', { required: true })}
+                {field('tradeLicenseExpiry', 'Trade license expiry', { type: 'date', required: true })}
+                <Select label="Business type" name="businessType" value={form.businessType} error={errors.businessType} required onChange={(e) => setField('businessType', e.target.value)}>
                   <option value="">Select type</option>
                   {BUSINESS_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
                 </Select>
                 {field('tinNumber', 'TIN number')}
                 {field('vatBinNumber', 'VAT / BIN number')}
-                <FileField label="Trade license document *" name="tradeLicense" file={files.tradeLicense} error={errors.tradeLicense} onChange={setFile} />
+                <FileField label="Trade license document" name="tradeLicense" file={files.tradeLicense} error={errors.tradeLicense} required onChange={setFile} />
               </div>
             </Card>
             <Card title="Owner information & NID">
               <div className="grid gap-4 sm:grid-cols-2">
-                {field('fullNameEng', 'Full name (English) *')}
+                {field('fullNameEng', 'Full name (English)', { required: true })}
                 {field('fullNameBen', 'Full name (Bangla)')}
-                {field('nidNumber', 'NID number *', { inputMode: 'numeric' })}
+                {field('nidNumber', 'NID number', { inputMode: 'numeric', required: true })}
                 {field('dob', 'Date of birth', { type: 'date' })}
                 {field('presentAddress', 'Present address')}
                 {field('permanentAddress', 'Permanent address')}
-                <FileField label="Owner NID document *" name="ownerNid" file={files.ownerNid} error={errors.ownerNid} onChange={setFile} />
+                <FileField label="Owner NID document" name="ownerNid" file={files.ownerNid} error={errors.ownerNid} required onChange={setFile} />
               </div>
             </Card>
             <div className="flex justify-end"><Button type="button" onClick={next}><T>{"Next: Warehouse Logistics"}</T></Button></div>
@@ -152,9 +155,9 @@ export default function VendorKybForm() {
           <>
             <Card title="Warehouse & dispatch">
               <div className="grid gap-4 sm:grid-cols-2">
-                {field('warehouseAddress', 'Warehouse address *', { className: 'sm:col-span-2' })}
-                {field('primaryContactPerson', 'Primary contact person *')}
-                {field('dispatchMobile', 'Dispatch mobile *', { type: 'tel' })}
+                {field('warehouseAddress', 'Warehouse address', { className: 'sm:col-span-2', required: true })}
+                {field('primaryContactPerson', 'Primary contact person', { required: true })}
+                {field('dispatchMobile', 'Dispatch mobile', { type: 'tel', required: true })}
                 {field('productCategories', 'Product categories (comma separated)')}
                 {field('deliveryLeadTimeHours', 'Delivery lead time (hours)', { type: 'number', min: 0 })}
               </div>

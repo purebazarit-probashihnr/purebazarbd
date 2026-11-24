@@ -90,8 +90,16 @@ describe('POS cashier shifts API', () => {
       order.cashier.toString() === filter.cashier.toString()
       && order.outlet.toString() === filter.outlet.toString()
       && order.paymentStatus === filter.paymentStatus
-      && order.createdAt >= filter.createdAt.$gte
-      && order.createdAt <= filter.createdAt.$lte
+      && filter.$or.some((term) => {
+        if (term.offlineId?.$exists) {
+          return Boolean(order.offlineId)
+            && order.soldAt >= term.soldAt.$gte
+            && order.soldAt <= term.soldAt.$lte;
+        }
+        return !order.offlineId
+          && order.createdAt >= term.createdAt.$gte
+          && order.createdAt <= term.createdAt.$lte;
+      })
     ))));
     models.AuditLog.create.mockImplementation(async (rows) => {
       db.audits.push(...rows);
@@ -143,29 +151,54 @@ describe('POS cashier shifts API', () => {
         cashier: otherCashierId, outlet: outletId, paymentStatus: 'PAID', createdAt: soldAt,
         payments: [{ method: 'CASH', amount: 500 }],
       },
+      {
+        cashier: cashierId, outlet: outletId, paymentStatus: 'PAID', offlineId: 'offline-in-shift',
+        soldAt: new Date(soldAt.getTime() + 1), createdAt: new Date(Date.now() + 60000),
+        payments: [{ method: 'CASH', amount: 7.5 }],
+      },
+      {
+        cashier: cashierId, outlet: outletId, paymentStatus: 'PAID',
+        offlineId: 'offline-wallet-in-shift', walletOffline: true, walletVerification: 'pending',
+        soldAt: new Date(soldAt.getTime() + 2), createdAt: new Date(Date.now() + 60000),
+        payments: [{ method: 'WALLET', amount: 75 }],
+      },
+      {
+        cashier: cashierId, outlet: outletId, paymentStatus: 'PAID',
+        offlineId: 'offline-wallet-unverifiable-in-shift', walletOffline: true,
+        walletVerification: 'unverifiable',
+        soldAt: new Date(soldAt.getTime() + 3), createdAt: new Date(Date.now() + 60000),
+        payments: [{ method: 'WALLET', amount: 25 }],
+      },
+      {
+        cashier: cashierId, outlet: outletId, paymentStatus: 'PAID', offlineId: 'offline-before-shift',
+        soldAt: new Date(soldAt.getTime() - 1), createdAt: soldAt,
+        payments: [{ method: 'CASH', amount: 100 }],
+      },
     ];
 
     const closed = await request(app).post(`/api/pos/shifts/${shiftId}/close`).set(auth())
-      .send({ actualCash: 138 });
+      .send({ actualCash: 145 });
 
     expect(closed.status).toBe(200);
     expect(closed.body.shift).toMatchObject({
       status: 'CLOSED',
       openingCash: 100,
-      expectedCash: 140.25,
-      actualCash: 138,
-      cashDifference: -2.25,
+      expectedCash: 147.75,
+      actualCash: 145,
+      cashDifference: -2.75,
     });
     expect(closed.body.report).toMatchObject({
-      expectedCash: 140.25,
-      actualCash: 138,
-      cashDifference: -2.25,
+      expectedCash: 147.75,
+      actualCash: 145,
+      cashDifference: -2.75,
       paymentSummary: expect.arrayContaining([
-        { method: 'Cash', expectedAmount: 140.25, actualAmount: 138 },
+        { method: 'Cash', expectedAmount: 147.75, actualAmount: 145 },
         { method: 'Card', expectedAmount: 19.75, actualAmount: 19.75 },
         { method: 'bKash', expectedAmount: 20, actualAmount: 20 },
+        { method: 'Wallet', expectedAmount: 100, actualAmount: 100 },
       ]),
     });
+    expect(closed.body.report).not.toHaveProperty('offlineWalletPending');
     expect(models.Order.find).toHaveBeenCalledWith(expect.objectContaining({
       cashier: cashierId,
       outlet: outletId,

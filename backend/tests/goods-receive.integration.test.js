@@ -7,7 +7,8 @@ jest.mock('../models', () => ({
   AuditLog: { create: jest.fn() },
   GoodsReceive: { create: jest.fn(), find: jest.fn(), findById: jest.fn() },
   Location: { findById: jest.fn() },
-  Product: { find: jest.fn() },
+  PriceHistory: { create: jest.fn() },
+  Product: { create: jest.fn(), exists: jest.fn(), find: jest.fn(), findById: jest.fn() },
   StockMovement: { aggregate: jest.fn(), create: jest.fn() },
   Unit: { find: jest.fn() },
   User: { findById: jest.fn() },
@@ -15,7 +16,7 @@ jest.mock('../models', () => ({
 }));
 
 const {
-  AuditLog, GoodsReceive, Location, Product, StockMovement, Unit, User, Vendor,
+  AuditLog, GoodsReceive, Location, PriceHistory, Product, StockMovement, Unit, User, Vendor,
 } = require('../models');
 const stockRoutes = require('../routes/stockRoutes');
 const errorMiddleware = require('../middlewares/errorMiddleware');
@@ -129,6 +130,8 @@ describe('goods receive and movement-derived stock endpoints', () => {
       lean: jest.fn(async () => ({ _id: id, status: vendorStatus })),
     }));
     Product.find.mockImplementation(() => productQuery([rice]));
+    Product.exists.mockResolvedValue(false);
+    PriceHistory.create.mockResolvedValue({});
     Unit.find.mockReturnValue(productQuery([{
       _id: unitId, name: 'Box', abbreviation: 'box',
     }]));
@@ -166,6 +169,45 @@ describe('goods receive and movement-derived stock endpoints', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('creates a vendor copy from the GRN inline offer endpoint', async () => {
+    const targetVendorId = new mongoose.Types.ObjectId('65b000000000000000000008');
+    const source = {
+      ...rice,
+      vendorPrice: 70,
+      mrp: 100,
+      vatApplicable: false,
+      barcodeSource: 'manufacturer',
+      barcodes: ['01234567'],
+      save: jest.fn(),
+    };
+    const copy = { ...source, _id: new mongoose.Types.ObjectId(), vendorId: targetVendorId, ownerType: 'VENDOR' };
+    Product.findById.mockResolvedValue(source);
+    Product.create.mockResolvedValue(copy);
+
+    const response = await request(app).post('/api/goods-receives/vendor-copy').set(auth).send({
+      sourceProductId: productId,
+      vendorId: targetVendorId.toString(),
+      vendorPrice: 70,
+      mrp: 100,
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.product).toMatchObject({
+      id: copy._id.toString(),
+      vendorId: targetVendorId.toString(),
+      barcode: source.barcode,
+      barcodes: source.barcodes,
+    });
+    expect(Product.create).toHaveBeenCalledWith(expect.objectContaining({
+      ownerType: 'VENDOR',
+      vendorId: targetVendorId.toString(),
+      productGroupId: source._id,
+      barcode: source.barcode,
+      barcodes: source.barcodes,
+    }));
+    expect(PriceHistory.create).toHaveBeenCalled();
   });
 
   async function createDraft(lines = [{
@@ -420,7 +462,7 @@ describe('goods receive and movement-derived stock endpoints', () => {
     })]);
     expect(Product.find).toHaveBeenCalledWith({
       ownerType: 'COMPANY',
-      $or: [{ name: /Rice/i }, { barcode: /Rice/i }],
+      $or: [{ name: /Rice/i }, { barcode: /Rice/i }, { barcodes: /Rice/i }],
     });
   });
 

@@ -18,6 +18,11 @@ const stockTransferSchema = new mongoose.Schema({
   receivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   dispatchedAt: { type: Date },
   receivedAt: { type: Date },
+  carrierName: { type: String, trim: true, maxlength: 120 },
+  carrierPhone: { type: String, trim: true, maxlength: 40 },
+  vehicle: { type: String, trim: true, maxlength: 120 },
+  notes: { type: String, trim: true, maxlength: 500 },
+  challanPrintCount: { type: Number, min: 0, default: 0 },
 }, { timestamps: true });
 
 stockTransferSchema.index({ fromWarehouseId: 1, status: 1, createdAt: -1 });

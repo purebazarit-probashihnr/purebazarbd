@@ -156,7 +156,7 @@ export default function StockAdjustmentsPage() {
       const response = await searchReceiveProducts(token, {
         warehouseId, mode, q: barcode, limit: 10,
       });
-      const product = response.data.products.find((item) => item.barcode === barcode);
+      const product = response.data.products.find((item) => item.barcode === barcode || (item.barcodes || []).includes(barcode));
       if (!product) {
         setError(`No eligible product matches barcode ${barcode}.`);
         return;

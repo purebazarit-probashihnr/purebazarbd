@@ -15,6 +15,7 @@ import {
 } from './vendor-payout-utils';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
+import { vendorIdentifier, vendorLabel } from '@/services/vendor-identity.cjs';
 
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
 const badgeTone = (status) => ({ Draft: 'warning', Approved: 'info' }[status] || 'neutral');
@@ -142,7 +143,7 @@ export default function VendorPayoutsPage() {
         <div className="mb-4 grid gap-3 sm:grid-cols-2">
           <Select label="Vendor" name="vendorFilter" value={vendorFilter} onChange={(event) => setVendorFilter(event.target.value)}>
             <option value=""><T>{"All vendors"}</T></option>
-            {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name} · {vendor.shopName}</option>)}
+            {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendorLabel(vendor)}</option>)}
           </Select>
           <Select label="Status" name="statusFilter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value=""><T>{"All open statuses"}</T></option>
@@ -157,7 +158,7 @@ export default function VendorPayoutsPage() {
               <tbody>
                 {filteredRows.map((statement) => (
                   <tr key={statement._id}>
-                    <td><strong className="block text-slate-800">{statement.vendor.name}</strong><small className="text-slate-500">{statement.vendor.shopName}</small></td>
+                    <td><strong className="block text-slate-800">{statement.vendor.name}</strong><small className="text-slate-500">{statement.vendor.shopName} · {vendorIdentifier(statement.vendor)}</small></td>
                     <td><strong className="block">{statement.statementNumber}</strong><small className="text-slate-500">{formatDate(statement.periodStart)} – {formatDate(statement.periodEnd)}</small></td>
                     <td>{statement.sales} / {statement.returns}</td>
                     <td className="font-semibold">{formatMoney(statement.netPayable)}</td>

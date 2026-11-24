@@ -9,7 +9,7 @@ jest.mock('../models', () => {
   return {
     AuditLog: { create: jest.fn() },
     User: { findById: jest.fn() },
-    Order: { find: jest.fn() },
+    Order: { find: jest.fn(), aggregate: jest.fn(), countDocuments: jest.fn() },
     Shareholder: { find: jest.fn() },
     WalletReconciliation: fakeModel(jest.requireActual('../models/WalletReconciliation'), store),
     __store: store,
@@ -23,6 +23,7 @@ const errorMiddleware = require('../middlewares/errorMiddleware');
 
 const secret = 'wallet-recon-test-secret';
 const userId = new mongoose.Types.ObjectId('65d000000000000000000001');
+const locationId = new mongoose.Types.ObjectId('65d000000000000000000002');
 const date = '2026-03-10';
 const id = () => new mongoose.Types.ObjectId();
 
@@ -48,9 +49,13 @@ describe('wallet reconciliation API', () => {
     models.__store.length = 0;
     permissions = ['finance:read', 'finance:write'];
     models.AuditLog.create.mockReset().mockResolvedValue({});
+    models.Order.aggregate.mockReset().mockResolvedValue([]);
     models.User.findById.mockImplementation(() => ({
       populate: jest.fn(async () => ({
-        _id: userId, isActive: true, roleId: { _id: userId, name: 'Finance', permissions },
+        _id: userId,
+        locationId,
+        isActive: true,
+        roleId: { _id: userId, name: 'Finance', permissions },
       })),
     }));
     models.Shareholder.find.mockReturnValue({ lean: async () => [member] });
@@ -73,6 +78,11 @@ describe('wallet reconciliation API', () => {
 
     const res = await run();
     expect(res.status).toBe(200);
+    expect(models.Order.find).toHaveBeenCalledWith(expect.objectContaining({
+      'payments.method': 'WALLET',
+      walletOffline: { $ne: true },
+      paymentStatus: 'PAID',
+    }));
     expect(byOrder(res, 'B1')).toMatchObject({ status: 'Matched', probashiTransactionId: 'T1' });
     expect(byOrder(res, 'B2')).toMatchObject({ status: 'Mismatch', mismatchType: 'AMOUNT_MISMATCH', probashiAmount: 250 });
     expect(byOrder(res, 'B3')).toMatchObject({ status: 'Mismatch', mismatchType: 'MISSING' });
@@ -127,5 +137,117 @@ describe('wallet reconciliation API', () => {
   it('validates dates', async () => {
     expect((await request(app).post('/api/finance/wallet-reconciliation/run').set(auth).send({ date: 'nope' })).status).toBe(400);
     expect((await request(app).post('/api/finance/wallet-reconciliation/run').set(auth).send({ date: '2999-01-01' })).status).toBe(400);
+  });
+
+  it('lists offline wallet bills without verification status fields', async () => {
+    const order = {
+      _id: id(),
+      orderNumber: 'OFF-WALLET',
+      soldAt: new Date(`${date}T10:00:00+06:00`),
+      createdAt: new Date(`${date}T10:00:00+06:00`),
+      grandTotal: 125,
+      payments: [{ method: 'WALLET', amount: 125 }],
+      cashier: { name: 'Cashier' },
+      outlet: { name: 'Outlet' },
+      walletOffline: true,
+      walletVerification: 'unverifiable',
+      walletVerificationReason: 'No member ID or reference recorded',
+    };
+    const query = {
+      select: jest.fn().mockReturnThis(),
+      populate: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([{
+        _id: order._id,
+        orderNumber: order.orderNumber,
+        soldAt: order.soldAt,
+        createdAt: order.createdAt,
+        grandTotal: order.grandTotal,
+        payments: order.payments,
+        cashier: order.cashier,
+        outlet: order.outlet,
+      }]),
+    };
+    models.Order.find.mockReturnValue(query);
+
+    const response = await request(app)
+      .get(`/api/finance/wallet-reconciliation/offline?date=${date}`).set(auth);
+
+    expect(response.status).toBe(200);
+    expect(response.body.orders).toHaveLength(1);
+    expect(response.body.orders[0]).toMatchObject({
+      orderNumber: 'OFF-WALLET',
+      grandTotal: 125,
+      payments: [{ method: 'WALLET', amount: 125 }],
+    });
+    expect(response.body.orders[0]).not.toHaveProperty('walletVerification');
+    expect(response.body).not.toHaveProperty('totals');
+    expect(query.select).toHaveBeenCalledWith(
+      'orderNumber soldAt createdAt grandTotal payments cashier outlet',
+    );
+    expect(models.Order.find).toHaveBeenCalledWith(expect.objectContaining({
+      walletOffline: true,
+      paymentStatus: 'PAID',
+    }));
+    expect(response.body.dateTotal).toMatchObject({ date, amount: 0 });
+  });
+
+  it('does not expose manual verification for offline wallet bills', async () => {
+    const response = await request(app)
+      .post(`/api/finance/wallet-reconciliation/offline/${id()}/verify`).set(auth);
+
+    expect(response.status).toBe(404);
+    expect(probashi.getTransactionReport).not.toHaveBeenCalled();
+  });
+
+  it('hides legacy offline wallet rows from online reconciliation results', async () => {
+    const offlineOrder = { ...wallet('OFF-OLD', 125), walletOffline: true };
+    await models.WalletReconciliation.create({
+      businessDate: date,
+      orderId: offlineOrder._id,
+      orderNumber: offlineOrder.orderNumber,
+      memberId: member.memberId,
+      amount: 125,
+    });
+    models.Order.find.mockImplementation((filter) => ({
+      lean: async () => (filter.walletOffline ? [offlineOrder] : []),
+    }));
+
+    const response = await request(app)
+      .get(`/api/finance/wallet-reconciliation?date=${date}`).set(auth);
+
+    expect(response.status).toBe(200);
+    expect(response.body.records).toEqual([]);
+    expect(response.body.totals).toMatchObject({ matched: 0, mismatch: 0, pending: 0 });
+    expect(probashi.getTransactionReport).not.toHaveBeenCalled();
+  });
+
+  it('totals offline wallet bills for the selected business date', async () => {
+    models.Order.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      populate: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([]),
+    });
+    models.Order.countDocuments.mockResolvedValue(0);
+    models.Order.aggregate.mockResolvedValue([{ _id: null, count: 2, amountCents: 12505 }]);
+
+    const response = await request(app)
+      .get(`/api/finance/wallet-reconciliation/offline?date=${date}`)
+      .set(auth);
+
+    expect(response.status).toBe(200);
+    expect(response.body.dateTotal).toEqual({ date, count: 2, amount: 125.05 });
+    const [pipeline] = models.Order.aggregate.mock.calls[0];
+    expect(pipeline[0].$match).toMatchObject({
+      walletOffline: true,
+      paymentStatus: 'PAID',
+      $or: [
+        { soldAt: { $gte: new Date(`${date}T00:00:00+06:00`), $lt: new Date('2026-03-10T18:00:00.000Z') } },
+        expect.objectContaining({ soldAt: { $exists: false } }),
+      ],
+    });
   });
 });

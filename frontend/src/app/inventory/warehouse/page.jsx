@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Search } from 'lucide-react';
-import { Badge, Card, Input, Select, Table } from '@/components/ui';
+import { Badge, Card, Input, Table } from '@/components/ui';
 import { formatStock } from '@/services/stock-units.cjs';
-import { getLocations, getWarehouseStock } from '@/services/stock';
+import { getCentralWarehouseStock } from '@/services/stock';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
 import CameraBarcodeScanner from '@/components/common/camera-barcode-scanner';
@@ -15,11 +15,7 @@ const can = (permissions, permission) => permissions.includes('*') || permission
 export default function WarehousePage() {
   const { token, user, initialized } = useSelector((state) => state.auth);
   const canRead = can(user?.permissions || [], 'stock:read');
-  const isSuperAdmin = user?.role === 'Super Admin';
-  const canChooseLocation = isSuperAdmin || user?.location?.type === 'CENTRAL';
-  const assignedLocationId = String(user?.locationId?._id || user?.locationId || '');
-  const [location, setLocation] = useState(null);
-  const [locations, setLocations] = useState([]);
+  const [warehouse, setWarehouse] = useState(null);
   const [stock, setStock] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -33,51 +29,31 @@ export default function WarehousePage() {
       return undefined;
     }
     let active = true;
-    getLocations(token)
+    setError('');
+    getCentralWarehouseStock(token)
       .then((response) => {
-        const availableLocations = response.data.locations.filter((item) => (
-          item.isActive !== false && (canChooseLocation || item.id === assignedLocationId)
-        ));
-        if (!availableLocations.length) {
-          throw new Error(isSuperAdmin
-            ? 'No active locations are available.'
-            : 'Your assigned location is not available.');
-        }
-        const selected = availableLocations.find(({ id }) => id === assignedLocationId)
-          || availableLocations.find(({ type }) => type === 'CENTRAL')
-          || availableLocations[0];
         if (!active) return;
-        setLocations(availableLocations);
-        setLocation(selected);
+        setWarehouse(response.data.warehouse);
+        setStock(response.data.stock);
       })
       .catch((requestError) => active && setError(
-        requestError.response?.data?.message || requestError.message || 'Unable to load location stock.',
+        requestError.response?.data?.message || requestError.message || 'Unable to find Central Warehouse.',
       ))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [assignedLocationId, canChooseLocation, canRead, initialized, isSuperAdmin, token]);
-
-  useEffect(() => {
-    if (!token || !location?.id) return undefined;
-    let active = true;
-    setStock([]);
-    getWarehouseStock(token, location.id)
-      .then((response) => active && setStock(response.data.stock))
-      .catch((requestError) => active && setError(
-        requestError.response?.data?.message || 'Unable to load location stock.',
-      ));
-    return () => { active = false; };
-  }, [location?.id, token]);
+  }, [canRead, initialized, token]);
 
   const visibleStock = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return stock;
-    return stock.filter((item) => `${item.productName} ${item.barcode}`.toLowerCase().includes(query));
+    return stock.filter((item) => `${item.productName} ${item.barcode} ${(item.barcodes || []).join(' ')} ${item.vendorName || ''} ${item.vendorBrand || ''}`.toLowerCase().includes(query));
   }, [search, stock]);
 
   const columns = [
     { key: 'productName', label: 'Product' },
     { key: 'barcode', label: 'Barcode' },
+    { key: 'vendorName', label: 'Vendor', render: (name) => name ? <Badge tone="info">{name}</Badge> : '—' },
+    { key: 'vendorBrand', label: 'Vendor brand', render: (brand) => brand || '—' },
     {
       key: 'ownerType',
       label: 'Owner',
@@ -93,24 +69,13 @@ export default function WarehousePage() {
     <section className="space-y-5">
       <div>
         <p className="mb-1 text-xs font-semibold uppercase text-slate-500"><T>{"Inventory"}</T></p>
-        <h1 className="text-2xl font-semibold text-slate-900">{location?.name || 'Location'} Stock</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">{warehouse?.name || 'Central Warehouse'} Stock</h1>
         <p className="mt-1 text-sm text-slate-600"><T>{"Current balance is calculated from approved stock movements."}</T></p>
       </div>
-      {canChooseLocation && (
-        <div className="max-w-sm">
-          <Select
-            label="Stock location"
-            name="warehouseId"
-            value={location?.id || ''}
-            onChange={(event) => setLocation(locations.find((item) => item.id === event.target.value) || null)}
-          >
-            {locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </Select>
-        </div>
-      )}
+      {error && <p role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
       <Card title="Stock on hand" description={`${stock.length} products with stock movement history`}>
         <div className="mb-4 flex max-w-xl items-end gap-2">
-          <Input label="Search stock" name="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Product name or barcode" />
+          <Input label="Search stock" name="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Product, barcode, vendor name, or vendor brand" />
           <CameraBarcodeScanner onScan={setSearch} />
           <Search size={16} aria-hidden="true" className="pointer-events-none relative -mt-7 ml-auto mr-3 text-slate-400" />
         </div>

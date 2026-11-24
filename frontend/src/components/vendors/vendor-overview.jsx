@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { ArrowLeft, Printer } from 'lucide-react';
-import { Button, Card, Input } from '@/components/ui';
+import { Badge, Button, Card, Input } from '@/components/ui';
 import { getVendorOverview } from '@/services/vendor';
 import { T } from '@/i18n/language-provider';
 import VendorStatementInvoice from './vendor-statement-invoice';
@@ -14,7 +14,7 @@ import { money, productStock } from './vendor-format';
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
 
 function Field({ label, value }) {
-  return <div><dt className="text-xs uppercase text-slate-500">{label}</dt><dd className="font-medium text-slate-800">{value || '—'}</dd></div>;
+  return <div><dt className="text-xs uppercase text-slate-500"><T>{label}</T></dt><dd className="font-medium text-slate-800">{value || '—'}</dd></div>;
 }
 
 export default function VendorOverview() {
@@ -57,6 +57,7 @@ export default function VendorOverview() {
           <div>
             <Link href="/vendors/directory" className="mb-1 inline-flex items-center gap-1 text-xs font-semibold uppercase text-slate-500"><ArrowLeft size={14} /> <T>{"Vendor Directory"}</T></Link>
             <h1 className="text-2xl font-semibold text-slate-900">{vendor?.name || 'Vendor details'}</h1>
+            {vendor && <Badge tone={vendor.membershipType === 'Non-member' ? 'neutral' : 'info'}>{vendor.membershipType || (vendor.memberId ? 'Probashi member' : 'Non-member')}</Badge>}
           </div>
           <Button onClick={() => window.print()} disabled={!data}><Printer size={16} /> <T>{"Print Statement / Generate Invoice"}</T></Button>
         </div>
@@ -76,7 +77,7 @@ export default function VendorOverview() {
             <Card title="Vendor information">
               <dl className="grid gap-3 sm:grid-cols-3">
                 <Field label="Name" value={vendor.name} />
-                <Field label="Member ID (Probashi)" value={vendor.memberId} />
+                <Field label={vendor.memberId ? 'Member ID' : 'Vendor code'} value={vendor.memberId || vendor.vendorCode} />
                 <Field label="Shop" value={vendor.shopName} />
                 <Field label="Category" value={vendor.productCategory} />
                 <Field label="Contact" value={[vendor.mobile, vendor.email].filter(Boolean).join(' · ')} />

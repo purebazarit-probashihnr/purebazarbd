@@ -9,6 +9,7 @@ jest.mock('../models', () => ({
       shareholderDiscountPercent: 5,
       stockAdjustmentApprovalLimit: 0,
       lateGraceMinutes: 10,
+      showPricesOnChallan: false,
       vatEnabled: false,
       defaultVatRate: 0,
       vatPriceMode: 'EXCLUDED',
@@ -23,6 +24,8 @@ jest.mock('../models', () => ({
       enabledVendorPayoutMethods: ['Cash', 'Bank', 'bKash', 'Nagad'],
       commissionEnabled: false,
       vendorWalletPayoutEnabled: false,
+      allowWalletPaymentOffline: false,
+      maximumOfflineWalletAmountPerBill: 2000,
       outlets: [],
     }),
   })), { findOne: jest.fn(), findOneAndUpdate: jest.fn() }),
@@ -59,6 +62,7 @@ function settingsDocument(fields = {}) {
     shareholderDiscountPercent: 5,
     stockAdjustmentApprovalLimit: 0,
     lateGraceMinutes: 10,
+    showPricesOnChallan: false,
     vatEnabled: false,
     defaultVatRate: 0,
     vatPriceMode: 'EXCLUDED',
@@ -73,6 +77,8 @@ function settingsDocument(fields = {}) {
     enabledVendorPayoutMethods: ['Cash', 'Bank', 'bKash', 'Nagad'],
     commissionEnabled: false,
     vendorWalletPayoutEnabled: false,
+    allowWalletPaymentOffline: false,
+    maximumOfflineWalletAmountPerBill: 2000,
     outlets: [],
     ...fields,
   };
@@ -129,6 +135,46 @@ describe('settings and audit endpoints', () => {
     );
   });
 
+  it('saves the offline session duration and cashier POS lock policy', async () => {
+    const updated = settingsDocument({ offlineSessionHours: 12, lockCashierToPos: true });
+    Settings.findOneAndUpdate.mockResolvedValue(updated);
+    const response = await request(app).put('/api/settings').set(auth).send({
+      offlineSessionHours: 12,
+      lockCashierToPos: true,
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.settings).toMatchObject({
+      offlineSessionHours: 12,
+      lockCashierToPos: true,
+    });
+  });
+
+  it('saves offline wallet controls and rejects a negative maximum', async () => {
+    const updated = settingsDocument({
+      allowWalletPaymentOffline: true,
+      maximumOfflineWalletAmountPerBill: 1500,
+    });
+    Settings.findOneAndUpdate.mockResolvedValue(updated);
+    const response = await request(app).put('/api/settings').set(auth).send({
+      allowWalletPaymentOffline: true,
+      maximumOfflineWalletAmountPerBill: 1500,
+    });
+    const invalid = await request(app).put('/api/settings').set(auth).send({
+      maximumOfflineWalletAmountPerBill: -1,
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.settings).toMatchObject({
+      allowWalletPaymentOffline: true,
+      maximumOfflineWalletAmountPerBill: 1500,
+    });
+    expect(invalid.status).toBe(400);
+    expect((await request(app).put('/api/settings').set(auth).send({
+      requireMemberIdAndReferenceForOfflineWallet: true,
+    })).status).toBe(400);
+  });
+
   it('returns defaults and protects settings from unauthenticated or non-admin access', async () => {
     Settings.findOne.mockReturnValue(chain(null));
     const defaults = await request(app).get('/api/settings').set(auth);
@@ -146,9 +192,12 @@ describe('settings and audit endpoints', () => {
       shareholderDiscountPercent: 5,
       stockAdjustmentApprovalLimit: 0,
       lateGraceMinutes: 10,
+      showPricesOnChallan: false,
       vatEnabled: false,
       commissionEnabled: false,
       vendorWalletPayoutEnabled: false,
+      allowWalletPaymentOffline: false,
+      maximumOfflineWalletAmountPerBill: 2000,
     });
     expect(defaults.body.settings.probashiStatus).toBe('NotConfigured');
     expect(unauthenticated.status).toBe(401);
@@ -218,6 +267,27 @@ describe('settings and audit endpoints', () => {
     expect(Settings.findOneAndUpdate).toHaveBeenCalledWith(
       { singleton: 'global' },
       { $set: { lateGraceMinutes: 15 } },
+      expect.objectContaining({ runValidators: true }),
+    );
+    expect(invalid.status).toBe(400);
+  });
+
+  it('defaults challan prices to hidden and saves the visibility setting', async () => {
+    Settings.findOne.mockReturnValue(chain(null));
+    const defaults = await request(app).get('/api/settings').set(auth);
+    const updatedSettings = settingsDocument({ showPricesOnChallan: true });
+    Settings.findOneAndUpdate.mockResolvedValue(updatedSettings);
+    const updated = await request(app).put('/api/settings').set(auth)
+      .send({ showPricesOnChallan: true });
+    const invalid = await request(app).put('/api/settings').set(auth)
+      .send({ showPricesOnChallan: 'yes' });
+
+    expect(defaults.body.settings.showPricesOnChallan).toBe(false);
+    expect(updated.status).toBe(200);
+    expect(updated.body.settings.showPricesOnChallan).toBe(true);
+    expect(Settings.findOneAndUpdate).toHaveBeenCalledWith(
+      { singleton: 'global' },
+      { $set: { showPricesOnChallan: true } },
       expect.objectContaining({ runValidators: true }),
     );
     expect(invalid.status).toBe(400);

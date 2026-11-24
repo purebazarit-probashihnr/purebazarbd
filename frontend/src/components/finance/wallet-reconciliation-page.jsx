@@ -5,7 +5,8 @@ import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { Badge, Button, Card, Input, Modal, Table } from '@/components/ui';
 import {
-  getWalletReconciliation, resolveWalletReconciliation, runWalletReconciliation,
+  getOfflineWalletBills, getWalletReconciliation, resolveWalletReconciliation,
+  runWalletReconciliation,
 } from '@/services/finance';
 import { formatFinanceDate, formatFinanceMoney, localDateInput } from './finance-utils';
 import { T } from '@/i18n/language-provider';
@@ -33,6 +34,9 @@ export default function WalletReconciliationPage() {
   const [resolving, setResolving] = useState(null);
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [offlineWallets, setOfflineWallets] = useState([]);
+  const [offlineWalletDateTotal, setOfflineWalletDateTotal] = useState({ count: 0, amount: 0 });
+  const [offlineWalletLoading, setOfflineWalletLoading] = useState(true);
 
   useEffect(() => {
     if (!token || !canRead) return undefined;
@@ -45,6 +49,23 @@ export default function WalletReconciliationPage() {
         requestError.response?.data?.message || 'Unable to load wallet reconciliation.',
       ))
       .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [canRead, date, reload, token]);
+
+  useEffect(() => {
+    if (!token || !canRead) return undefined;
+    let active = true;
+    setOfflineWalletLoading(true);
+    getOfflineWalletBills(token, date)
+      .then(({ data: result }) => {
+        if (!active) return;
+        setOfflineWallets(result.orders);
+        setOfflineWalletDateTotal(result.dateTotal);
+      })
+      .catch((requestError) => active && setError(
+        requestError.response?.data?.message || 'Unable to load offline wallet bills.',
+      ))
+      .finally(() => active && setOfflineWalletLoading(false));
     return () => { active = false; };
   }, [canRead, date, reload, token]);
 
@@ -81,6 +102,14 @@ export default function WalletReconciliationPage() {
       setSaving(false);
     }
   }
+
+  const offlineWalletColumns = [
+    { key: 'orderNumber', label: 'Bill' },
+    { key: 'soldAt', label: 'Date & time', render: (value, order) => new Date(value || order.createdAt).toLocaleString() },
+    { key: 'outlet', label: 'Outlet', render: (outlet) => outlet?.name || '—' },
+    { key: 'cashier', label: 'Cashier', render: (cashier) => cashier?.name || '—' },
+    { key: 'grandTotal', label: 'Amount', render: formatFinanceMoney },
+  ];
 
   const columns = [
     { key: 'orderNumber', label: 'Wallet bill' },
@@ -129,6 +158,17 @@ export default function WalletReconciliationPage() {
           <Input label="Business date" name="date" type="date" max={localDateInput()} value={date} onChange={(event) => setDate(event.target.value)} />
         </div>
         {!canWrite && <p className="mt-3 text-sm text-slate-500"><T>{"Read-only access. Finance write permission is required to run or resolve reconciliation records."}</T></p>}
+      </Card>
+
+      <Card title="Offline wallet bills" description="Offline wallet bills for the selected date.">
+        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-medium text-slate-700">Total offline wallet bills · {date}</p>
+          <strong className="text-xl">{formatFinanceMoney(offlineWalletDateTotal.amount)}</strong>
+          <p className="mt-1 text-sm text-slate-500">{offlineWalletDateTotal.count} bill(s)</p>
+        </div>
+        {offlineWalletLoading ? <p role="status">Loading offline wallet bills…</p> : (
+          <Table columns={offlineWalletColumns} rows={offlineWallets} rowKey="_id" emptyMessage="No offline wallet bills." />
+        )}
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

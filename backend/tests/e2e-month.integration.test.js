@@ -150,6 +150,8 @@ describe('A full month of PureBazar operations', () => {
     const quantities = { [ids.honey]: 40, [ids.rice]: 20 };
     res = await as(admin).post(`/api/stock-transfers/${transferId}/dispatch`, {
       lines: Object.entries(quantities).map(([productId, dispatchedQuantity]) => ({ productId, dispatchedQuantity })),
+      carrierName: 'Sample Carrier',
+      carrierPhone: '01700000000',
     });
     expect(res.status).toBe(200);
     res = await as(cashier).post(`/api/stock-transfers/${transferId}/receive`, {

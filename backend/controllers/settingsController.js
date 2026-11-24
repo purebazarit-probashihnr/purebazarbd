@@ -10,6 +10,11 @@ const settingsInputSchema = Joi.object({
   centralWarehouseLowStockEnabled: Joi.boolean(),
   dailySalesTarget: Joi.number().min(0).precision(2),
   lateGraceMinutes: Joi.number().integer().min(0),
+  offlineSessionHours: Joi.number().integer().min(1).max(24),
+  lockCashierToPos: Joi.boolean(),
+  allowWalletPaymentOffline: Joi.boolean(),
+  maximumOfflineWalletAmountPerBill: Joi.number().min(0).precision(2),
+  showPricesOnChallan: Joi.boolean(),
   vatEnabled: Joi.boolean(),
   defaultVatRate: Joi.number().min(0).max(100),
   vatPriceMode: Joi.string().valid('INCLUDED', 'EXCLUDED'),
@@ -50,6 +55,12 @@ function settingsResponse(settings) {
         : settings.discountLimitByRole || {},
     };
   if (result.lateGraceMinutes == null) result.lateGraceMinutes = 10;
+  if (result.showPricesOnChallan == null) result.showPricesOnChallan = false;
+  if (result.offlineSessionHours == null) result.offlineSessionHours = 24;
+  if (result.lockCashierToPos == null) result.lockCashierToPos = false;
+  if (result.allowWalletPaymentOffline == null) result.allowWalletPaymentOffline = false;
+  if (result.maximumOfflineWalletAmountPerBill == null) result.maximumOfflineWalletAmountPerBill = 2000;
+  delete result.offlineNumberCounters;
   delete result.singleton;
   return result;
 }

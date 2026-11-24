@@ -19,7 +19,7 @@ export default function VendorStatementInvoice({ data }) {
       <div className="grid grid-cols-2 gap-2">
         <div>
           <p><strong>Vendor:</strong> {vendor.name}</p>
-          <p><strong>Member ID:</strong> {vendor.memberId}</p>
+          <p><strong>{vendor.memberId ? 'Member ID:' : 'Vendor code:'}</strong> {vendor.memberId || vendor.vendorCode}</p>
           <p><strong>Shop:</strong> {vendor.shopName}</p>
           <p><strong>Category:</strong> {vendor.productCategory}</p>
         </div>

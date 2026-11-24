@@ -41,7 +41,12 @@ jest.mock('../models', () => {
   };
 });
 
+jest.mock('../services/dashboardService', () => ({
+  lowStockAlerts: jest.fn(),
+}));
+
 const models = require('../models');
+const { lowStockAlerts } = require('../services/dashboardService');
 const notificationRoutes = require('../routes/notificationRoutes');
 const errorMiddleware = require('../middlewares/errorMiddleware');
 
@@ -62,6 +67,13 @@ describe('GET /api/notifications', () => {
 
   beforeEach(() => {
     process.env.JWT_SECRET = secret;
+    lowStockAlerts.mockResolvedValue([{
+      productId: p1.toString(),
+      locationId: outlet.toString(),
+      productName: 'Rice',
+      locationName: 'Outlet-1',
+      quantityLabel: '2 Box',
+    }]);
     global.__db = {
       StockCount: [{ _id: id(), status: 'PendingApproval' }, { _id: id(), status: 'Posted' }],
       StockAdjustment: [{ _id: id(), status: 'Pending', reason: 'Damage' }, { _id: id(), status: 'Approved' }],
@@ -105,8 +117,40 @@ describe('GET /api/notifications', () => {
 
   it('is empty when nothing is pending', async () => {
     permissions = ['*'];
+    lowStockAlerts.mockResolvedValue([]);
     global.__db = { StockCount: [], StockAdjustment: [], StockTransfer: [], GoodsReceive: [], VendorStatement: [], WalletReconciliation: [], SalarySheet: [], SalaryAdvance: [], Product: [], Location: [], StockMovement: [] };
     const { body } = await get().expect(200);
     expect(body.notifications).toEqual({ total: 0, groups: [] });
+  });
+
+  it('returns each low-stock notification once with a location-specific ID', async () => {
+    permissions = ['stock:read'];
+    global.__db.StockCount = [];
+    global.__db.StockAdjustment = [];
+    global.__db.GoodsReceive = [];
+    const outletAlert = {
+      productId: p1.toString(),
+      locationId: outlet.toString(),
+      productName: 'Rice',
+      locationName: 'Outlet-1',
+      quantityLabel: '2 Box',
+    };
+    lowStockAlerts.mockResolvedValue([
+      outletAlert,
+      { ...outletAlert },
+      { ...outletAlert, locationId: central.toString(), locationName: 'Central Warehouse' },
+    ]);
+
+    const { body } = await get().expect(200);
+    const lowStock = body.notifications.groups.find((group) => group.key === 'low-stock');
+
+    expect(body.notifications.total).toBe(2);
+    expect(lowStock.count).toBe(2);
+    expect(lowStock.items).toHaveLength(2);
+    expect(new Set(lowStock.items.map((item) => item.id)).size).toBe(2);
+    expect(lowStock.items.map((item) => item.id)).toEqual([
+      `LOW_STOCK:${p1}:${outlet}`,
+      `LOW_STOCK:${p1}:${central}`,
+    ]);
   });
 });

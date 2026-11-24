@@ -1,12 +1,4 @@
-const dotenv = require('dotenv');
-const path = require('path');
-const mongoose = require('mongoose');
-const connectDB = require('../config/db');
-const { Product } = require('../models');
 const { generateEan13Barcode, isValidEan13 } = require('../utils/productIdentifiers');
-
-dotenv.config({ path: path.join(__dirname, '../.env') });
-dotenv.config();
 
 function prepareProductBarcodeUpdates(products, createBarcode = generateEan13Barcode) {
   const usedBarcodes = new Set(products.map(({ barcode }) => barcode).filter(Boolean));
@@ -35,29 +27,11 @@ function prepareProductBarcodeUpdates(products, createBarcode = generateEan13Bar
 }
 
 async function migrateProductBarcodes() {
-  const products = await Product.find().select('_id barcode').sort({ _id: 1 }).lean();
-  const updates = prepareProductBarcodeUpdates(products);
-  if (!updates.length) return { scanned: products.length, updated: 0 };
-
-  const result = await Product.bulkWrite(updates.map(({ id, barcode }) => ({
-    updateOne: {
-      filter: { _id: id },
-      update: { $set: { barcode } },
-    },
-  })), { ordered: true, runValidators: true });
-
-  return { scanned: products.length, updated: result.modifiedCount };
+  throw new Error('Deprecated: use migrate:vendor-product-barcodes (dry run by default; pass -- --apply to apply).');
 }
 
 async function main() {
-  if (!process.argv.includes('--apply')) {
-    throw new Error('Pass --apply to regenerate legacy product barcodes in the configured database');
-  }
-  if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required');
-
-  await connectDB(process.env.MONGODB_URI);
-  const result = await migrateProductBarcodes();
-  console.log(`Product barcode migration complete: ${JSON.stringify(result)}`);
+  await migrateProductBarcodes();
 }
 
 if (require.main === module) {
@@ -65,9 +39,6 @@ if (require.main === module) {
     .catch((error) => {
       console.error(`Product barcode migration failed: ${error.message}`);
       process.exitCode = 1;
-    })
-    .finally(async () => {
-      if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
     });
 }
 

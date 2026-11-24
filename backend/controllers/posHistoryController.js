@@ -9,6 +9,15 @@ async function listSalesHistory(req, res, next) {
   }
 }
 
+async function auditReceiptReprint(req, res, next) {
+  try {
+    const order = await posHistoryReturnService.auditReceiptReprint(req);
+    return res.json({ success: true, order });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function returnBill(req, res, next) {
   try {
     const returned = await posHistoryReturnService.returnBill(req);
@@ -18,4 +27,4 @@ async function returnBill(req, res, next) {
   }
 }
 
-module.exports = { listSalesHistory, returnBill };
+module.exports = { auditReceiptReprint, listSalesHistory, returnBill };

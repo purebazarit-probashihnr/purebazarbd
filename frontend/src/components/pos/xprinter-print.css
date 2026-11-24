@@ -1,7 +1,9 @@
 ﻿/* Receipt layout on screen */
 .receipt-sheet { color: #000; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.3; width: 100%; }
 .receipt-center { text-align: center; }
-.receipt-logo { align-items: center; border: 2px solid #000; border-radius: 50%; display: inline-flex; font-weight: 700; height: 34px; justify-content: center; width: 34px; }
+.receipt-logo-img { display: block; filter: grayscale(1) contrast(1000%); height: auto; margin: 0 auto 3px; max-height: 20mm; max-width: 55mm; object-fit: contain; width: auto; }
+.receipt-reprint { display: block; font-size: 13px; margin-top: 3px; }
+.receipt-line-detail { display: block; font-size: 10px; }
 .receipt-title { display: block; font-size: 16px; }
 .receipt-sheet hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; }
 .receipt-table { border-collapse: collapse; width: 100%; }
@@ -15,6 +17,7 @@
 
 [data-print-mode='receipt-80mm'] #pos-print-area { max-width: 100%; width: 80mm; }
 [data-print-mode='receipt-58mm'] #pos-print-area { max-width: 100%; width: 58mm; }
+[data-print-mode='receipt-58mm'] .receipt-logo-img { max-width: 40mm; }
 
 @media print {
   body { background: #fff !important; margin: 0 !important; }

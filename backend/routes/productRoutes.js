@@ -27,6 +27,13 @@ const optionalId = (field) => body(field).optional({ nullable: true }).isMongoId
   .withMessage(`${field} must be a valid ID`);
 const optionalPrice = (field) => body(field).optional().isFloat({ min: 0 }).toFloat()
   .withMessage(`${field} must be zero or greater`);
+const barcode = body('barcode').optional({ nullable: true }).isString().trim().isLength({ max: 100 })
+  .withMessage('Barcode must be at most 100 characters');
+const barcodes = [
+  body('barcodes').optional().isArray({ max: 20 }).withMessage('Enter at most 20 extra barcodes'),
+  body('barcodes.*').optional().isString().trim().isLength({ min: 1, max: 100 })
+    .withMessage('Each extra barcode must be 1 to 100 characters'),
+];
 
 const pieceRules = [
   body('unitsPerPackage').optional({ nullable: true }).isInt({ min: 1 }).toInt()
@@ -39,9 +46,21 @@ const rejectStockUpdate = body().custom((value) => (
 )).withMessage('Stock quantities cannot be changed through product updates');
 
 router.get('/', read, productsController.listProducts);
+router.get('/barcodes/:barcode', read, [
+  param('barcode').isString().trim().isLength({ min: 1, max: 100 }),
+], validateRequest, productsController.findBarcodeMatches);
+router.post('/:id/add-vendor', write, [
+  id,
+  body('vendorId').isMongoId().withMessage('A valid vendor ID is required'),
+  vendorPrice,
+  mrp,
+], validateRequest, productsController.addVendorCopy);
 router.post('/', write, [
   name, sku, categoryId, unitId, ownerType, vendorPrice, mrp,
   optionalId('brandId'), optionalId('vendorId'),
+  barcode, ...barcodes,
+  body('barcodeSource').optional().isIn(['manufacturer', 'internal'])
+    .withMessage('barcodeSource must be manufacturer or internal'),
   body('vatApplicable').optional().isBoolean().toBoolean()
     .withMessage('vatApplicable must be a boolean'),
   optionalPrice('vatRate').custom((value) => value === undefined || value <= 100)
@@ -57,6 +76,10 @@ router.put('/:id', write, [
   sku,
   body('categoryId').optional().isMongoId().withMessage('A valid category ID is required'),
   body('unitId').optional().isMongoId().withMessage('A valid unit ID is required'),
+  barcode,
+  ...barcodes,
+  body('barcodeSource').optional().isIn(['manufacturer', 'internal'])
+    .withMessage('barcodeSource must be manufacturer or internal'),
   body('ownerType').optional().isIn(['COMPANY', 'VENDOR'])
     .withMessage('Owner type must be COMPANY or VENDOR'),
   optionalPrice('vendorPrice'),

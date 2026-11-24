@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { Bell } from 'lucide-react';
 import { getNotifications } from '@/services/notifications';
+import { normalizeNotifications } from '@/services/notification-state.cjs';
 import { useLanguage } from '@/i18n/language-provider';
 
 const POLL_MS = 30000;
@@ -21,7 +22,7 @@ export default function NotificationBell() {
     if (!token) return;
     try {
       const response = await getNotifications(token);
-      setData(response.data.notifications || { total: 0, groups: [] });
+      setData(normalizeNotifications(response.data.notifications));
     } catch {
       // keep the last known state; the next poll retries
     }

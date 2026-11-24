@@ -168,6 +168,14 @@ export default function SettingsForm() {
         />
       </SettingsSection>
 
+      <SettingsSection title="Transfer challan" description="Configure whether transfer challans include product prices.">
+        <ToggleField
+          label="Show prices on challan"
+          checked={Boolean(settings.showPricesOnChallan)}
+          onChange={(event) => setField('showPricesOnChallan', event.target.checked)}
+        />
+      </SettingsSection>
+
       <SettingsSection title="Low stock alerts" description="Outlets warn only when stock falls below this minimum (in main units, e.g. boxes).       Central Warehouse is checked only when enabled below.">
         <Input
           label="Low stock alert threshold"
@@ -192,6 +200,38 @@ export default function SettingsForm() {
           step="1"
           value={settings.lateGraceMinutes}
           onChange={(event) => setField('lateGraceMinutes', Number(event.target.value))}
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Offline POS and cashier access" description="Set the maximum offline login window and optionally keep cashiers in POS modules.">
+        <Input
+          label="Offline session duration (hours, maximum 24)"
+          type="number"
+          min="1"
+          max="24"
+          step="1"
+          value={settings.offlineSessionHours}
+          onChange={(event) => setField('offlineSessionHours', Number(event.target.value))}
+        />
+        <ToggleField
+          label="Lock cashier to POS"
+          description="Users without other module permissions, and users with an open shift, are limited to POS and Cashier Shift."
+          checked={Boolean(settings.lockCashierToPos)}
+          onChange={(event) => setField('lockCashierToPos', event.target.checked)}
+        />
+        <ToggleField
+          label="Allow wallet payment offline"
+          description="Allow wallet payments to be recorded while offline."
+          checked={Boolean(settings.allowWalletPaymentOffline)}
+          onChange={(event) => setField('allowWalletPaymentOffline', event.target.checked)}
+        />
+        <Input
+          label="Maximum offline wallet amount per bill (৳)"
+          type="number"
+          min="0"
+          step="0.01"
+          value={settings.maximumOfflineWalletAmountPerBill}
+          onChange={(event) => setField('maximumOfflineWalletAmountPerBill', Number(event.target.value))}
         />
       </SettingsSection>
 

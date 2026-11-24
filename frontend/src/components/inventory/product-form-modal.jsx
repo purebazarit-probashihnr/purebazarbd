@@ -11,6 +11,7 @@ import QuickAddBrandModal from './quick-add-brand-modal';
 import QuickAddCategoryModal from './quick-add-category-modal';
 import QuickAddUnitModal from './quick-add-unit-modal';
 import VendorAutocomplete from './vendor-autocomplete';
+import ProductBarcodeFields from './product-barcode-fields';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
 
@@ -19,6 +20,9 @@ const emptyForm = {
   sku: '',
   ownerType: 'COMPANY',
   vendorId: '',
+  barcode: '',
+  barcodes: '',
+  barcodeSource: 'internal',
   vendorPrice: '',
   mrp: '',
   categoryId: '',
@@ -44,7 +48,7 @@ function roundedMoney(value) {
 }
 
 export default function ProductFormModal({
-  open, onClose, onSubmit, token, permissions, marginWarningPercent,
+  open, onClose, onSubmit, token, permissions, marginWarningPercent, onOpenExisting, onAddVendor,
 }) {
   const [form, setForm] = useState(emptyForm);
   const [categories, setCategories] = useState([]);
@@ -56,6 +60,7 @@ export default function ProductFormModal({
   const piecesEdited = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [barcodeConflict, setBarcodeConflict] = useState(false);
   useToastMessages({ error });
 
   const permissionsKey = permissions.join('|');
@@ -88,6 +93,7 @@ export default function ProductFormModal({
     setForm({ ...emptyForm });
     piecesEdited.current = false;
     setError('');
+    setBarcodeConflict(false);
     setCatalogErrors([]);
   }, [open]);
 
@@ -152,6 +158,9 @@ export default function ProductFormModal({
       unitId: form.unitId,
       ownerType: form.ownerType,
       ...(form.ownerType === 'VENDOR' ? { vendorId: form.vendorId.trim() } : {}),
+      ...(form.barcode.trim() ? { barcode: form.barcode.trim() } : {}),
+      barcodeSource: form.barcode.trim() ? form.barcodeSource : 'internal',
+      barcodes: [...new Set(form.barcodes.split(/\r?\n|,/).map((value) => value.trim()).filter(Boolean))],
       vendorPrice: roundedVendorPrice,
       mrp: roundedMrp,
       ...(hasPieces ? { unitsPerPackage } : {}),
@@ -240,7 +249,16 @@ export default function ProductFormModal({
               </Select>
               {can('units:write') && <Button type="button" variant="secondary" size="sm" aria-label="Quick add unit" title="Quick add unit" onClick={() => setQuickAdd('unit')}><Plus size={15} /> <T>{"Quick Add"}</T></Button>}
             </div>
-            <Input label="Barcode" name="barcode" value="Generated when product is saved" readOnly />
+            <ProductBarcodeFields
+              barcode={form.barcode}
+              barcodes={form.barcodes}
+              barcodeSource={form.barcodeSource}
+              onChange={(changes) => setForm((current) => ({ ...current, ...changes }))}
+              onConflictChange={setBarcodeConflict}
+              token={token}
+              onOpenExisting={(id) => onOpenExisting?.(id)}
+              onAddVendor={(id) => onAddVendor?.(id)}
+            />
           </div>
           {catalogLoading && <p role="status" className="text-xs text-slate-500"><T>{"Loading product categories, brands, and units..."}</T></p>}
           {catalogErrors.map((message) => <p key={message} role="alert" className="text-xs text-amber-800">{message}</p>)}
@@ -279,7 +297,7 @@ export default function ProductFormModal({
 
           <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving || catalogLoading || !hasPrices || invalidMrp || invalidOverride}>{saving ? 'Saving...' : 'Save product'}</Button>
+            <Button type="submit" disabled={saving || catalogLoading || !hasPrices || invalidMrp || invalidOverride || barcodeConflict}>{saving ? 'Saving...' : 'Save product'}</Button>
           </div>
         </form>
       </Modal>

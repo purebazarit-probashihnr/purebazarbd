@@ -117,7 +117,7 @@ export default function StockCountsPage() {
   const stockUnits = useMemo(() => new Map(stock.map((item) => [item.productId, item.unitsPerPackage])), [stock]);
   const matches = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return query ? products.filter((product) => `${product.name} ${product.barcode}`.toLowerCase().includes(query)).slice(0, 8) : [];
+    return query ? products.filter((product) => `${product.name} ${product.barcode} ${(product.barcodes || []).join(' ')}`.toLowerCase().includes(query)).slice(0, 8) : [];
   }, [products, search]);
 
   const addProduct = useCallback((product) => {
@@ -138,7 +138,7 @@ export default function StockCountsPage() {
   }
 
   const scanner = useBarcodeScanner((barcode) => {
-    const product = products.find((item) => item.barcode === barcode);
+    const product = products.find((item) => item.barcode === barcode || (item.barcodes || []).includes(barcode));
     if (!product) {
       setError(`No product matches barcode ${barcode}.`);
       return;
@@ -253,7 +253,7 @@ export default function StockCountsPage() {
                 </div>
                 {matches.length > 0 && <div className="absolute z-10 mt-1 max-h-52 w-full overflow-y-auto rounded border border-slate-200 bg-white shadow-lg">
                   {matches.map((product) => <button key={product.id} type="button" className="block w-full border-b border-slate-100 px-3 py-2 text-left hover:bg-slate-50" onClick={() => addProduct(product)}>
-                    <span className="block text-sm font-medium">{product.name}</span><small className="text-slate-500">{product.barcode}</small>
+                    <span className="block text-sm font-medium">{product.name}</span><small className="text-slate-500">{product.barcode} {product.vendorName ? `· ${product.vendorName}` : ''}</small>
                   </button>)}
                 </div>}
               </div>

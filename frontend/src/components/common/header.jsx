@@ -14,7 +14,7 @@ import AttendanceClockControl from './attendance-clock-control';
 
 const DASHBOARD_LOCATION_KEY = 'purebazar.dashboardLocationId';
 
-export default function Header({ section, onMenuClick }) {
+export default function Header({ section, onMenuClick, posLocked = false }) {
   const pathname = usePathname();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const wrapRef = useRef(null);
@@ -85,7 +85,13 @@ export default function Header({ section, onMenuClick }) {
         </div>
       </div>
       <div className="header-actions">
-      {canViewAllLocations && pathname === '/dashboard' ? (
+      {posLocked ? (
+        <nav className="flex items-center gap-2" aria-label={t('POS navigation')}>
+          <Link className="rounded-md px-2 py-1 text-sm font-medium hover:bg-slate-100" href="/orders/pos">{t('POS')}</Link>
+          <Link className="rounded-md px-2 py-1 text-sm font-medium hover:bg-slate-100" href="/orders/shifts">{t('Cashier Shift')}</Link>
+        </nav>
+      ) : null}
+      {!posLocked && (canViewAllLocations && pathname === '/dashboard' ? (
         <>
           <label className="header-location">
             <span className="sr-only">{t('Dashboard location')}</span>
@@ -102,10 +108,10 @@ export default function Header({ section, onMenuClick }) {
         <span className="header-location-readonly" aria-label={t('Location')}>
           {user.location.name}
         </span>
-      ) : null}
-      <AttendanceClockControl token={token} compact />
-      <LanguageSwitcher />
-      {canAccess(['stock:read']) || canAccess(['stock:transfer:read']) ? <NotificationBell /> : null}
+      ) : null)}
+      {!posLocked && <AttendanceClockControl token={token} compact />}
+      {!posLocked && <LanguageSwitcher />}
+      {!posLocked && (canAccess(['stock:read']) || canAccess(['stock:transfer:read']) ? <NotificationBell /> : null)}
       <div className="user-menu-wrap" ref={wrapRef}>
         <button
           className="user-menu-trigger"
@@ -124,7 +130,7 @@ export default function Header({ section, onMenuClick }) {
               <div className="user-menu-who"><strong>{user?.name || user?.email}</strong><span className="user-role-badge">{user?.role || 'Staff'}</span></div>
             </div>
             {logoutError && <p className="user-menu-error" role="alert">{logoutError}</p>}
-            {canAccess(['settings:read']) && <Link href="/settings" role="menuitem" className="user-menu-item" onClick={() => setUserMenuOpen(false)}><Settings size={16} />{t('Settings')}</Link>}
+            {!posLocked && canAccess(['settings:read']) && <Link href="/settings" role="menuitem" className="user-menu-item" onClick={() => setUserMenuOpen(false)}><Settings size={16} />{t('Settings')}</Link>}
             <Button className="user-menu-logout" variant="ghost" size="sm" role="menuitem" disabled={status === 'loading'} onClick={handleLogout}>
               <LogOut size={16} />{t(status === 'loading' ? 'Signing out...' : 'Sign out')}
             </Button>

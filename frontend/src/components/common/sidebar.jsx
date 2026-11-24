@@ -23,7 +23,9 @@ function getActiveHref(pathname) {
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 }
 
-export default function Sidebar({ open, onClose }) {
+const offlinePosLinks = ['/orders/pos', '/orders/shifts'];
+
+export default function Sidebar({ open, onClose, posLocked = false, offline = false }) {
   const pathname = usePathname();
   const { canAccess } = useAuth();
   const { t } = useLanguage();
@@ -56,7 +58,7 @@ export default function Sidebar({ open, onClose }) {
         aria-label={t("Main navigation")}
       >
         <div className="sidebar-brand">
-          <Link href="/dashboard" className="brand-link" onClick={onClose}>
+          <Link href={posLocked || offline ? '/orders/pos' : '/dashboard'} className="brand-link" onClick={onClose}>
             <img
               src="/logo.png"
               alt="PureBazar Logo"
@@ -75,9 +77,24 @@ export default function Sidebar({ open, onClose }) {
         <nav className="sidebar-nav">
           {navigationItems.map((item) => {
             const { label, href, icon: Icon, children } = item;
+            if (posLocked && !offline && label !== 'Sales & POS') return null;
             if (!children) {
               if (!canSee(item)) return null;
               const active = activeHref === href;
+              if (offline && !offlinePosLinks.includes(href)) {
+                return (
+                  <div
+                    key={label}
+                    className="nav-link nav-link-disabled"
+                    aria-disabled="true"
+                    title={t('Available when online')}
+                  >
+                    <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
+                    <span>{t(label)}</span>
+                    <small>{t('Available when online')}</small>
+                  </div>
+                );
+              }
               return (
                 <Link
                   key={label}
@@ -91,7 +108,8 @@ export default function Sidebar({ open, onClose }) {
                 </Link>
               );
             }
-            const visibleChildren = children.filter((child) => canSee(child));
+            const visibleChildren = children.filter((child) => canSee(child)
+              && (!posLocked || offline || offlinePosLinks.includes(child.href)));
             if (!visibleChildren.length) return null;
             const expanded = openGroup === label;
             const groupActive = activeGroup === label;
@@ -125,6 +143,20 @@ export default function Sidebar({ open, onClose }) {
                         icon: ChildIcon,
                       }) => {
                         const childActive = activeHref === childHref;
+                        if (offline && !offlinePosLinks.includes(childHref)) {
+                          return (
+                            <div
+                              key={childLabel}
+                              className="nav-sublink nav-link-disabled"
+                              aria-disabled="true"
+                              title={t('Available when online')}
+                            >
+                              <ChildIcon size={16} strokeWidth={1.8} aria-hidden="true" />
+                              <span>{t(childLabel)}</span>
+                              <small>{t('Available when online')}</small>
+                            </div>
+                          );
+                        }
                         return (
                           <Link
                             href={childHref}

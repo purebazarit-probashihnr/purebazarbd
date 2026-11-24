@@ -107,12 +107,21 @@ enforceLocationScope.forSalesHistory = createLocationScopeMiddleware({
   outletOnly: true,
   allLocationsOnRead: true,
 });
+enforceLocationScope.forSalesHistoryAudit = createLocationScopeMiddleware({
+  outletOnly: true,
+  allowLocationSelectionOnWrite: true,
+});
 enforceLocationScope.forStockRead = createLocationScopeMiddleware({ allowCentralLocationSelection: true });
 enforceLocationScope.forStockCounts = createLocationScopeMiddleware({ allowCentralLocationSelection: true });
 enforceLocationScope.forDashboard = createLocationScopeMiddleware({ locationQueryParam: 'locationId' });
 enforceLocationScope.forAccountingRead = createLocationScopeMiddleware({
   allLocationsOnRead: true,
   locationQueryParam: 'locationId',
+});
+enforceLocationScope.forAccountingWrite = createLocationScopeMiddleware({
+  allLocationsOnRead: true,
+  locationQueryParam: 'locationId',
+  allowLocationSelectionOnWrite: true,
 });
 enforceLocationScope.forExpenseWrite = createLocationScopeMiddleware({
   locationQueryParam: 'locationId',

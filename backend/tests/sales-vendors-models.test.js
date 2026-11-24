@@ -73,7 +73,21 @@ describe('Sales and vendor models', () => {
       termsVersion: '1',
     });
     expect(newVendor.nationality).toBe('Bangladeshi');
+    expect(newVendor.membershipType).toBe('Probashi member');
     await expect(newVendor.validate()).resolves.toBeUndefined();
+    const nonMemberVendor = new models.Vendor({
+      memberId: 'VND-0001',
+      vendorCode: 'VND-0001',
+      membershipType: 'Non-member',
+      name: 'Local Vendor',
+      mobile: '01700000001',
+      shopName: 'Local Shop',
+      address: 'Dhaka',
+      productCategory: 'Food',
+      termsAccepted: true,
+      termsVersion: '1',
+    });
+    await expect(nonMemberVendor.validate()).resolves.toBeUndefined();
     await expect(statement.validate()).rejects.toMatchObject({
       errors: { status: expect.objectContaining({ kind: 'enum' }) },
     });

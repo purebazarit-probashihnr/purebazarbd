@@ -9,6 +9,7 @@ import { getVendorPayouts } from '@/services/vendor';
 import { formatDate, formatMoney, idString } from './vendor-payout-utils';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
+import { vendorIdentifier, vendorLabel } from '@/services/vendor-identity.cjs';
 
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
 
@@ -39,6 +40,8 @@ export default function VendorPayoutHistoryPage() {
             id,
             name: typeof vendor === 'object' ? vendor.name : '',
             shopName: typeof vendor === 'object' ? vendor.shopName : '',
+            memberId: typeof vendor === 'object' ? vendor.memberId : '',
+            vendorCode: typeof vendor === 'object' ? vendor.vendorCode : '',
           }];
         }));
         setVendors([...vendorOptions.values()]);
@@ -87,7 +90,7 @@ export default function VendorPayoutHistoryPage() {
         <div className="mb-4 max-w-md">
           <Select label="Vendor" name="vendorFilter" value={vendorFilter} onChange={(event) => setVendorFilter(event.target.value)}>
             <option value=""><T>{"All vendors"}</T></option>
-            {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name} · {vendor.shopName}</option>)}
+            {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendorLabel(vendor)}</option>)}
           </Select>
         </div>
         {loading ? <p role="status" className="py-8 text-center text-sm text-slate-500"><T>{"Loading payout records..."}</T></p> : (
@@ -100,7 +103,7 @@ export default function VendorPayoutHistoryPage() {
                   const vendor = vendorById.get(vendorId);
                   return (
                     <tr key={payout._id}>
-                      <td><strong className="block text-slate-800">{vendor?.name || 'Vendor'}</strong><small className="text-slate-500">{vendor?.shopName || vendorId.slice(-8)}</small></td>
+                      <td><strong className="block text-slate-800">{vendor?.name || 'Vendor'}</strong><small className="text-slate-500">{vendor?.shopName || vendorId.slice(-8)}{vendor && ` · ${vendorIdentifier(vendor)}`}</small></td>
                       <td><strong className="block">{payout.statementNumber}</strong><small className="text-slate-500">{formatDate(payout.periodStart)} – {formatDate(payout.periodEnd)}</small></td>
                       <td><strong>{formatMoney(payout.netPayable)}</strong><small className="mt-1 block text-slate-500">Paid {formatDate(payout.paidAt)}</small></td>
                       <td><strong className="block">{payout.paymentMethod}</strong><small className="text-slate-500">Ref: {payout.paymentReference}</small></td>

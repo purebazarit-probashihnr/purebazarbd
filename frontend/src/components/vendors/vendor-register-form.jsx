@@ -119,15 +119,16 @@ export default function VendorRegisterForm() {
         )}
       </div>
 
-      <Card title="Vendor registration details" description="Member eligibility is verified by the server when this form is submitted.">
+      <Card title="Vendor registration details" description="Member eligibility is verified by the server when a Probashi Member ID is provided.">
         <form className="space-y-5" onSubmit={submit}>
+          <p className="text-sm text-slate-600"><T>{"Fields marked * are required"}</T></p>
           <section className="space-y-4">
             <div>
               <h2 className="text-base font-semibold text-slate-900"><T>{"Owner Personal Identity"}</T></h2>
               <p className="mt-1 text-sm text-slate-600"><T>{"Provide the owner's identity and contact information."}</T></p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input label="Probashi Member ID" name="memberId" value={form.memberId} onChange={(event) => setField('memberId', event.target.value)} maxLength={100} required autoComplete="off" />
+              <Input label="Probashi Member ID" name="memberId" value={form.memberId} onChange={(event) => setField('memberId', event.target.value)} maxLength={100} autoComplete="off" />
               <Input label="Applicant Name (English)" name="name" value={form.name} onChange={(event) => setField('name', event.target.value)} maxLength={150} required autoComplete="name" />
               <Input label="Applicant Name (Bengali)" name="applicantNameBn" value={form.applicantNameBn} onChange={(event) => setField('applicantNameBn', event.target.value)} maxLength={150} />
               <Input label="Father's Name" name="fatherName" value={form.fatherName} onChange={(event) => setField('fatherName', event.target.value)} maxLength={150} />
@@ -141,11 +142,11 @@ export default function VendorRegisterForm() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="ui-field" htmlFor="presentAddress">
-                <span className="field-label"><T>{"Present Address"}</T></span>
+                <span className="field-label"><T>{"Present Address"}</T><span className="text-red-600" aria-hidden="true"> *</span></span>
                 <textarea id="presentAddress" name="presentAddress" className="ui-input min-h-24" value={form.presentAddress} onChange={(event) => setField('presentAddress', event.target.value)} maxLength={500} required autoComplete="street-address" />
               </label>
               <label className="ui-field" htmlFor="permanentAddress">
-                <span className="field-label"><T>{"Permanent Address"}</T></span>
+                <span className="field-label"><T>{"Permanent Address"}</T><span className="text-red-600" aria-hidden="true"> *</span></span>
                 <textarea id="permanentAddress" name="permanentAddress" className="ui-input min-h-24" value={form.permanentAddress} onChange={(event) => setField('permanentAddress', event.target.value)} maxLength={500} required />
               </label>
             </div>
@@ -162,7 +163,7 @@ export default function VendorRegisterForm() {
               <Input label="Product Category" name="productCategory" value={form.productCategory} onChange={(event) => setField('productCategory', event.target.value)} maxLength={100} required />
             </div>
             <label className="ui-field" htmlFor="address">
-              <span className="field-label"><T>{"Business Address"}</T></span>
+              <span className="field-label"><T>{"Business Address"}</T><span className="text-red-600" aria-hidden="true"> *</span></span>
               <textarea id="address" name="address" className="ui-input min-h-24" value={form.address} onChange={(event) => setField('address', event.target.value)} maxLength={500} required autoComplete="street-address" />
             </label>
           </section>
@@ -187,8 +188,8 @@ export default function VendorRegisterForm() {
               <>
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{terms.terms}</p>
                 <label className="mt-4 flex items-start gap-2 border-t border-slate-200 pt-4 text-sm text-slate-700">
-                  <input type="checkbox" className="mt-0.5 h-4 w-4 accent-blue-600" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
-                  <span>The vendor has read and accepts Version {terms.version} of the vendor terms.</span>
+                  <input type="checkbox" className="mt-0.5 h-4 w-4 accent-blue-600" checked={accepted} required onChange={(event) => setAccepted(event.target.checked)} />
+                  <span>The vendor has read and accepts Version {terms.version} of the vendor terms.<span className="text-red-600" aria-hidden="true"> *</span></span>
                 </label>
               </>
             ) : (
@@ -197,7 +198,7 @@ export default function VendorRegisterForm() {
           </div>
           <div className="flex justify-end">
             <Button type="submit" disabled={saving || loadingTerms || !terms || !accepted}>
-              {saving ? 'Verifying and registering...' : 'Verify Member & Register'}
+              <T>{saving ? 'Verifying and registering...' : form.memberId.trim() ? 'Verify Member & Register' : 'Register Non-member'}</T>
             </Button>
           </div>
         </form>

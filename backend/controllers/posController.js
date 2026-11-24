@@ -52,6 +52,7 @@ module.exports = {
   finalizeBill: posCheckoutService.finalizeBill,
   scanItem,
   searchItems,
+  getCatalog: require('../services/posCatalogService').getCatalog,
   syncOfflineBill: posCheckoutService.syncOfflineBill,
   verifyMember,
 };

@@ -2,31 +2,21 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { ArrowDownToLine, ArrowUpFromLine, Check } from 'lucide-react';
-import { Badge, Button, Card, Input, Select, Table } from '@/components/ui';
+import { Badge, Button, Card, Select, Table } from '@/components/ui';
 import StockTransferRequestForm from '@/components/inventory/stock-transfer-request-form';
+import StockTransferDetail from '@/components/inventory/stock-transfer-detail';
+import TransferChallanScanner from '@/components/inventory/transfer-challan-scanner';
 import LocationReadFilter from '@/components/common/location-read-filter';
 import {
   createStockTransfer, dispatchStockTransfer, getLocations, getStockTransfers, receiveStockTransfer,
 } from '@/services/stock';
 import { T } from '@/i18n/language-provider';
 import useToastMessages from '@/hooks/use-toast-messages';
-import { formatStockDisplay } from '@/services/stock-units.cjs';
+import {
+  displayId, formatDate, statusTone, statuses,
+} from '@/components/inventory/stock-transfer-display';
 
-const qty = (value, line) => (line.isWeightBased ? formatStockDisplay(value, 'Gram') : value);
-const statuses = ['Requested', 'Dispatched', 'Received', 'Discrepancy'];
 const can = (permissions, permission) => permissions.includes('*') || permissions.includes(permission);
-const statusTone = {
-  Requested: 'warning',
-  Dispatched: 'info',
-  Received: 'success',
-  Discrepancy: 'danger',
-};
-const displayId = (id) => id.slice(-8).toUpperCase();
-const formatDate = (value) => new Intl.DateTimeFormat('en-BD', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-}).format(new Date(value));
 
 export default function StockTransfersPage() {
   const { token, user, initialized } = useSelector((state) => state.auth);
@@ -47,6 +37,7 @@ export default function StockTransfersPage() {
   const [selectedOutletId, setSelectedOutletId] = useState('all');
   const [selectedId, setSelectedId] = useState('');
   const [quantityDraft, setQuantityDraft] = useState({});
+  const [carrier, setCarrier] = useState({ name: '', phone: '', vehicle: '', notes: '' });
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -112,6 +103,12 @@ export default function StockTransfersPage() {
   function selectTransfer(transfer) {
     setSelectedId(transfer.id);
     setQuantityDraft({});
+    setCarrier({
+      name: transfer.carrierName || '',
+      phone: transfer.carrierPhone || '',
+      vehicle: transfer.vehicle || '',
+      notes: transfer.notes || '',
+    });
     setError('');
     setNotice('');
   }
@@ -148,10 +145,14 @@ export default function StockTransfersPage() {
   async function submitWorkflow(event) {
     event.preventDefault();
     if (!selectedTransfer) return;
+    const isDispatch = selectedTransfer.status === 'Requested';
+    if (isDispatch && (!carrier.name.trim() || !carrier.phone.trim())) {
+      setError('Enter the carrier name and phone before dispatching.');
+      return;
+    }
     setSaving(true);
     setError('');
     setNotice('');
-    const isDispatch = selectedTransfer.status === 'Requested';
     const quantityField = isDispatch ? 'dispatchedQuantity' : 'receivedQuantity';
     const lines = selectedTransfer.lines.map((line) => ({
       productId: line.productId,
@@ -160,7 +161,14 @@ export default function StockTransfersPage() {
     }));
     try {
       const action = isDispatch ? dispatchStockTransfer : receiveStockTransfer;
-      const response = await action(token, selectedTransfer.id, { lines });
+      const payload = { lines };
+      if (isDispatch) {
+        payload.carrierName = carrier.name.trim();
+        payload.carrierPhone = carrier.phone.trim();
+        payload.vehicle = carrier.vehicle.trim();
+        payload.notes = carrier.notes.trim();
+      }
+      const response = await action(token, selectedTransfer.id, payload);
       const updatedTransfer = response.data.stockTransfer;
       setTransfers((current) => current.map((transfer) => (
         transfer.id === updatedTransfer.id ? updatedTransfer : transfer
@@ -227,6 +235,7 @@ export default function StockTransfersPage() {
       )}
 
       <Card title="Transfer register" description={`${transfers.length} transfer${transfers.length === 1 ? '' : 's'} ${canSelectRegisterLocation && selectedOutletId === 'all' ? 'across all locations' : 'in your location scope'}`}>
+        <TransferChallanScanner transfers={transfers} onSelect={selectTransfer} onError={setError} />
         <div className="mb-4">
           <LocationReadFilter
             locations={locations}
@@ -246,55 +255,17 @@ export default function StockTransfersPage() {
       </Card>
 
       {selectedTransfer && (
-        <Card
-          title={`Transfer ${displayId(selectedTransfer.id)}`}
-          description={`${locationsById.get(selectedTransfer.fromWarehouseId) || 'Central warehouse'} to ${locationsById.get(selectedTransfer.toWarehouseId) || 'Outlet'} · ${formatDate(selectedTransfer.createdAt)}`}
-          actions={<Badge tone={statusTone[selectedTransfer.status] || 'neutral'}>{selectedTransfer.status}</Badge>}
-        >
-          <form className="space-y-4" onSubmit={submitWorkflow}>
-            <div className="space-y-3">
-              {selectedTransfer.receivedByName && (
-                <p className="text-sm text-slate-600">Confirmed by {selectedTransfer.receivedByName}</p>
-              )}
-              {selectedTransfer.lines.map((line) => {
-                const editable = (selectedTransfer.status === 'Requested' && canDispatchSelected)
-                  || (selectedTransfer.status === 'Dispatched' && canReceiveSelected);
-                const quantityName = selectedTransfer.status === 'Requested' ? 'Dispatch quantity' : 'Received quantity';
-                const currentQuantity = selectedTransfer.status === 'Requested'
-                  ? line.dispatchedQuantity
-                  : line.receivedQuantity;
-                const initialQuantity = selectedTransfer.status === 'Requested'
-                  ? line.requestedQuantity
-                  : line.dispatchedQuantity;
-                return (
-                  <div key={line.productId} className="grid items-center gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_repeat(3,minmax(5rem,auto))]">
-                    <div><strong className="block text-sm text-slate-800">{line.productName || displayId(line.productId)}</strong><small className="text-slate-500">{line.barcode || line.productId}</small></div>
-                    <span className="text-sm text-slate-600">Requested: {qty(line.requestedQuantity, line)}</span>
-                    {selectedTransfer.status !== 'Requested' && <span className="text-sm text-slate-600">Dispatched: {qty(line.dispatchedQuantity, line)}</span>}
-                    {editable ? (
-                      <div>
-                        <Input label={line.isWeightBased ? `${quantityName} (Gram)` : quantityName} type="number" min="0" step="any" value={quantityDraft[line.productId] ?? currentQuantity ?? initialQuantity} onChange={(event) => setQuantityDraft((current) => ({ ...current, [line.productId]: event.target.value }))} />
-                        {line.isWeightBased && <small className="text-slate-500">= {formatStockDisplay(quantityDraft[line.productId] ?? currentQuantity ?? initialQuantity, 'Gram')}</small>}
-                      </div>
-                    ) : selectedTransfer.status === 'Received' || selectedTransfer.status === 'Discrepancy' ? (
-                      <span className="text-sm text-slate-600">Received: {qty(line.receivedQuantity, line)}</span>
-                    ) : null}
-                    {line.discrepancyQuantity > 0 && <span className="text-sm font-medium text-red-700">Difference: {qty(line.discrepancyQuantity, line)}</span>}
-                  </div>
-                );
-              })}
-            </div>
-            {selectedTransfer.status === 'Requested' && canDispatchSelected && (
-              <div className="flex justify-end"><Button type="submit" disabled={saving}><ArrowUpFromLine size={16} /> {saving ? 'Dispatching...' : 'Dispatch transfer'}</Button></div>
-            )}
-            {selectedTransfer.status === 'Dispatched' && canReceiveSelected && (
-              <div className="flex justify-end"><Button type="submit" disabled={saving}><ArrowDownToLine size={16} /> {saving ? 'Confirming...' : 'Confirm outlet receipt'}</Button></div>
-            )}
-            {!((selectedTransfer.status === 'Requested' && canDispatchSelected) || (selectedTransfer.status === 'Dispatched' && canReceiveSelected)) && (
-              <p className="text-sm text-slate-500"><Check size={15} className="mr-1 inline" /> This transfer is read-only for your role or has completed its available action.</p>
-            )}
-          </form>
-        </Card>
+        <StockTransferDetail
+          transfer={selectedTransfer}
+          canDispatch={canDispatchSelected}
+          canReceive={canReceiveSelected}
+          carrier={carrier}
+          setCarrier={setCarrier}
+          quantityDraft={quantityDraft}
+          setQuantityDraft={setQuantityDraft}
+          saving={saving}
+          onSubmit={submitWorkflow}
+        />
       )}
     </section>
   );

@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { T } from '@/i18n/language-provider';
-
-const label = (vendor) => `${vendor.name} — ${vendor.shopName} (${vendor.mobile || vendor.memberId})`;
+import { matchesVendor, vendorIdentifier, vendorLabel } from '@/services/vendor-identity.cjs';
 
 export default function VendorCombobox({ vendors, value, onChange }) {
   const selected = vendors.find((vendor) => vendor.id === value);
@@ -21,10 +20,7 @@ export default function VendorCombobox({ vendors, value, onChange }) {
   }, []);
 
   const results = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return vendors;
-    return vendors.filter((vendor) => [vendor.name, vendor.shopName, vendor.mobile, vendor.memberId]
-      .some((field) => String(field || '').toLowerCase().includes(term)));
+    return vendors.filter((vendor) => matchesVendor(vendor, query));
   }, [query, vendors]);
 
   function choose(vendor) {
@@ -61,7 +57,7 @@ export default function VendorCombobox({ vendors, value, onChange }) {
         autoComplete="off"
         className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
         placeholder="Search by name, business or mobile"
-        value={open ? query : (selected ? label(selected) : query)}
+        value={open ? query : (selected ? vendorLabel(selected) : query)}
         onFocus={() => setOpen(true)}
         onChange={(event) => {
           setQuery(event.target.value);
@@ -86,7 +82,7 @@ export default function VendorCombobox({ vendors, value, onChange }) {
             >
               <span className="font-medium text-slate-900">{vendor.name}</span>
               <span className="text-slate-600"> — {vendor.shopName}</span>
-              <span className="block text-xs text-slate-500">{vendor.mobile} · {vendor.memberId}</span>
+              <span className="block text-xs text-slate-500">{vendor.mobile} · {vendorIdentifier(vendor)}</span>
             </li>
           ))}
         </ul>

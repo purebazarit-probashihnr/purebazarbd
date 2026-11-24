@@ -22,10 +22,16 @@ jest.mock('../models', () => ({
 jest.mock('../services/probashiWalletService', () => ({
   checkWalletBalance: jest.fn(),
   verifyMember: jest.fn(),
+  getTransactionReport: jest.fn(),
+}));
+
+jest.mock('../services/offlineWalletVerificationService', () => ({
+  verifyOfflineWalletOrder: jest.fn(),
 }));
 
 const models = require('../models');
 const walletService = require('../services/probashiWalletService');
+const offlineWalletVerifier = require('../services/offlineWalletVerificationService');
 const posRoutes = require('../routes/posRoutes');
 const errorMiddleware = require('../middlewares/errorMiddleware');
 
@@ -75,6 +81,7 @@ describe('POS checkout API', () => {
   beforeEach(() => {
     process.env.JWT_SECRET = secret;
     jest.clearAllMocks();
+    offlineWalletVerifier.verifyOfflineWalletOrder.mockResolvedValue({});
     failLedger = false;
     db = {
       orders: [],
@@ -100,6 +107,8 @@ describe('POS checkout API', () => {
     models.Settings.findOne.mockReturnValue(query({
       discountLimitByRole: { Cashier: 5, 'Super Admin': 0 },
       enabledPaymentMethods: ['Cash', 'bKash', 'Nagad', 'Card', 'Wallet'],
+      allowWalletPaymentOffline: true,
+      maximumOfflineWalletAmountPerBill: 2000,
     }));
     models.Shareholder.findById.mockReturnValue(query({
       _id: shareholderId, memberId: 'PB-001', verified: true, active: true, walletEnabled: true,
@@ -332,10 +341,12 @@ describe('POS checkout API', () => {
       payments: [{ method: 'CASH', amount: 90 }, { method: 'CARD', amount: 100 }],
       shareholderId: shareholderId.toString(),
     });
+
     expect(response.status).toBe(201);
     expect(response.body.order).toMatchObject({
       paymentStatus: 'PAID', subtotal: 200, otherDiscountAmount: 10, grandTotal: 190,
     });
+
     expect(response.body.order.memberId.toString()).toBe(shareholderId.toString());
     expect(response.body.receipt.lines[0]).toMatchObject({
       quantity: 2, subtotal: 200, billDiscountAmount: 10, total: 190,
@@ -347,6 +358,29 @@ describe('POS checkout API', () => {
       locationId: outletId,
     });
     expect(db.discounts[0]).toMatchObject({ amount: 10, reason: 'Offer' });
+  });
+
+  it('posts the vendor ledger against the vendor of the selected product copy', async () => {
+    const selectedVendorId = new mongoose.Types.ObjectId('65b000000000000000000009');
+    models.Product.find.mockReturnValue(query([{
+      ...product,
+      vendorId: selectedVendorId,
+      vendorPrice: 72,
+    }]));
+
+    const response = await checkout({
+      items: line(),
+      payments: [{ method: 'CASH', amount: 100 }],
+    });
+
+    expect(response.status).toBe(201);
+    expect(db.ledgers).toHaveLength(1);
+    expect(db.ledgers[0]).toMatchObject({
+      vendorId: selectedVendorId,
+      productId,
+      vendorPayable: 72,
+      companyNet: 28,
+    });
   });
 
   it('ignores client outlet selections and uses only the assigned outlet for order, stock, and ledger', async () => {
@@ -562,7 +596,8 @@ describe('POS checkout API', () => {
 
   it('syncs non-wallet offline bills idempotently and preserves the sale time', async () => {
     const body = {
-      offlineId: 'device-1-order-17',
+      offlineId: '31d03b03-95d2-4852-9c7d-899b8fa12217',
+      offlineNumber: 'OFF-65B000000000000000000003-17',
       soldAt: '2026-10-18T09:00:00.000Z',
       items: line(),
       payments: [{ method: 'BKASH', amount: 100 }],
@@ -582,6 +617,89 @@ describe('POS checkout API', () => {
     expect(new Date(first.body.receipt.soldAt).toISOString()).toBe(body.soldAt);
     expect(duplicate.body).toMatchObject({ synced: true, duplicate: true });
     expect(db.orders).toHaveLength(1);
+    expect(db.ledgers).toHaveLength(1);
+    expect(db.movements.filter((movement) => movement.type === 'SALE')).toHaveLength(1);
+  });
+
+  it('syncs offline wallet bills once without verification state or Probashi calls', async () => {
+    const body = {
+      offlineId: '4bf76c78-bd69-4c74-800f-1c85797e2355',
+      offlineNumber: 'OFF-65B000000000000000000003-19',
+      soldAt: '2026-10-18T09:00:00.000Z',
+      items: line(),
+      payments: [{ method: 'WALLET', amount: 0.01 }],
+      walletOffline: true,
+    };
+
+    const first = await request(app).post('/api/pos/offline-sync').set(auth()).send(body);
+    const duplicate = await request(app).post('/api/pos/offline-sync').set(auth()).send(body);
+
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({
+      synced: true, duplicate: false,
+      order: {
+        walletOffline: true,
+        shareholderDiscountAmount: 5, grandTotal: 95,
+        payments: [{ method: 'WALLET', amount: 95 }],
+      },
+    });
+    expect(first.body.order).not.toHaveProperty('walletVerification');
+    expect(first.body.order).not.toHaveProperty('walletVerificationReason');
+    expect(first.body.receipt).not.toHaveProperty('walletVerification');
+    expect(duplicate.status).toBe(200);
+    expect(duplicate.body).toMatchObject({
+      synced: true,
+      duplicate: true,
+    });
+    expect(duplicate.body.order).not.toHaveProperty('walletVerification');
+    expect(duplicate.body.receipt).not.toHaveProperty('walletVerification');
+    expect(db.orders).toHaveLength(1);
+    expect(walletService.checkWalletBalance).not.toHaveBeenCalled();
+    expect(walletService.verifyMember).not.toHaveBeenCalled();
+    expect(walletService.getTransactionReport).not.toHaveBeenCalled();
+    expect(offlineWalletVerifier.verifyOfflineWalletOrder).not.toHaveBeenCalled();
+  });
+
+  it('refuses an offline wallet bill above the configured maximum', async () => {
+    models.Settings.findOne.mockReturnValue(query({
+      discountLimitByRole: { Cashier: 5 },
+      enabledPaymentMethods: ['Cash', 'bKash', 'Nagad', 'Card', 'Wallet'],
+      allowWalletPaymentOffline: true,
+      maximumOfflineWalletAmountPerBill: 90,
+    }));
+
+    const response = await request(app).post('/api/pos/offline-sync').set(auth()).send({
+      offlineId: '70db388d-46a9-4c67-b3bd-9ae83733072e',
+      offlineNumber: 'OFF-65B000000000000000000003-21',
+      items: line(),
+      payments: [{ method: 'WALLET', amount: 100 }],
+      walletOffline: true,
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/limited to 90\.00 per bill/);
+    expect(db.orders).toHaveLength(0);
+    expect(offlineWalletVerifier.verifyOfflineWalletOrder).not.toHaveBeenCalled();
+  });
+
+  it('saves and flags an offline sale that makes outlet stock negative', async () => {
+    db.movements = [];
+    const response = await request(app).post('/api/pos/offline-sync').set(auth()).send({
+      offlineId: 'de973ce2-fc6e-4e16-a282-487fc0a1a0cf',
+      offlineNumber: 'OFF-65B000000000000000000003-18',
+      soldAt: '2026-10-18T09:10:00.000Z',
+      items: line(),
+      payments: [{ method: 'CASH', amount: 100 }],
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ synced: true, flagged: true });
+    expect(response.body.reviewFlags).toContain(`NEGATIVE_STOCK:${productId}`);
+    expect(db.orders[0]).toMatchObject({ reviewRequired: true });
+    expect(db.movements).toEqual([expect.objectContaining({ type: 'SALE', quantity: -1 })]);
+    expect(db.ledgers).toEqual([expect.objectContaining({
+      vendorId, entryType: 'SALE', quantity: 1, vendorPayable: 60, locationId: outletId,
+    })]);
   });
 
   describe('piece selling from box stock', () => {

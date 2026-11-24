@@ -1,15 +1,27 @@
 const mongoose = require('mongoose');
 const models = require('../models');
+const { ean13CheckDigit } = require('../utils/productBarcodes');
 
 const objectId = () => new mongoose.Types.ObjectId();
 
 describe('Mongoose models', () => {
+  let sequence;
+
+  beforeEach(() => {
+    sequence = 0;
+    jest.spyOn(models.ProductBarcodeCounter, 'findOneAndUpdate')
+      .mockImplementation(async () => ({ sequence: ++sequence }));
+    jest.spyOn(models.Product, 'exists').mockResolvedValue(false);
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
   it('registers every requested model', () => {
     expect(Object.keys(models).sort()).toEqual([
       'AttendanceRecord', 'AuditLog', 'Brand', 'Category', 'DiscountLog', 'Employee', 'Expense', 'ExpenseCategory',
-      'GoodsReceive', 'Location', 'Order', 'PriceHistory', 'Product', 'Return', 'Role', 'RosterEntry', 'SalaryAdvance',
+      'GoodsReceive', 'Location', 'Order', 'PriceHistory', 'Product', 'ProductBarcodeCounter', 'Return', 'Role', 'RosterEntry', 'SalaryAdvance',
       'SalarySheet', 'Settings', 'Shareholder', 'Shift', 'StockAdjustment', 'StockCount',
-      'StockMovement', 'StockTransfer', 'Unit', 'User', 'Vendor', 'VendorLedger',
+      'StockMovement', 'StockTransfer', 'Unit', 'User', 'Vendor', 'VendorCodeCounter', 'VendorLedger',
       'VendorRegistration', 'VendorStatement', 'WalletAuditLog', 'WalletLog', 'WalletReconciliation', 'WorkShift',
     ]);
   });
@@ -50,7 +62,7 @@ describe('Mongoose models', () => {
     expect(category.commissionEnabled).toBe(false);
   });
 
-  it('generates a valid EAN-13 barcode and enforces uniqueness', async () => {
+  it('generates an internal barcode and declares uniqueness per vendor', async () => {
     const product = new models.Product({
       name: 'Rice',
       categoryId: objectId(),
@@ -62,17 +74,19 @@ describe('Mongoose models', () => {
 
     await product.validate();
 
-    expect(product.barcode).toMatch(/^\d{13}$/);
-    const weightedBody = [...product.barcode.slice(0, 12)].reduce((sum, digit, index) => (
-      sum + Number(digit) * (index % 2 === 0 ? 1 : 3)
-    ), 0);
-    expect((weightedBody + Number(product.barcode[12])) % 10).toBe(0);
+    expect(product.barcode).toMatch(/^29\d{11}$/);
+    expect(product.barcode[12]).toBe(ean13CheckDigit(product.barcode.slice(0, 12)));
+    expect(product.barcodeSource).toBe('internal');
+    expect(product.productGroupId).toEqual(product._id);
     expect(models.Product.schema.indexes().some(([fields, options]) => (
-      fields.barcode === 1 && options.unique
+      fields.ownerType === 1
+      && fields.vendorId === 1
+      && fields.barcodeKeys === 1
+      && options.unique
     ))).toBe(true);
   });
 
-  it('rejects barcodes with an invalid EAN-13 check digit', async () => {
+  it('allows manufacturer barcodes with invalid check digits for warning-only UI validation', async () => {
     const product = new models.Product({
       name: 'Rice',
       categoryId: objectId(),
@@ -83,9 +97,8 @@ describe('Mongoose models', () => {
       barcode: '4006381333932',
     });
 
-    await expect(product.validate()).rejects.toMatchObject({
-      errors: { barcode: expect.objectContaining({ message: 'Barcode must be a valid EAN-13 number' }) },
-    });
+    await expect(product.validate()).resolves.toBeUndefined();
+    expect(product.barcodeSource).toBe('manufacturer');
   });
 
   it('requires a reason for stock adjustments', async () => {
@@ -157,7 +170,7 @@ describe('Mongoose models', () => {
   it('declares requested product lookup indexes', () => {
     const indexes = models.Product.schema.indexes().map(([fields]) => fields);
 
-    expect(indexes).toContainEqual({ barcode: 1 });
+    expect(indexes).toContainEqual({ ownerType: 1, vendorId: 1, barcodeKeys: 1 });
     expect(indexes).toContainEqual({ vendorId: 1 });
     expect(indexes).toContainEqual({ createdAt: 1 });
     expect(models.Product.schema.path('sku')).toBeDefined();
